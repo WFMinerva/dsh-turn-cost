@@ -2,6 +2,12 @@
 
 本文件按 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 维护，版本号遵循语义化版本。
 
+## [Unreleased]
+
+### Added
+
+- GitHub Actions CI：push / pull_request 触发，`actions/setup-node` + `node --test`，把计费核心回归卡在合入前（#4）
+
 ## [0.1.1] - 2026-08-17
 
 ### Changed
