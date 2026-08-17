@@ -70,6 +70,16 @@ dsh plugin --profile web add dsh-turn-cost
 | 模型 | 按 `request/header` 记录的模型取价（内置 Pro / Flash 两档官方 CNY 价） |
 | 不计 | 脚本直连 API 的调用、其它机器的会话、无官方 CNY 价的模型 |
 
+## 开发与维护
+
+本项目持续维护中。接手开发（包括新开一个对话的 AI）请先读：
+
+- [docs/DEVELOPMENT.md](./docs/DEVELOPMENT.md) — 完整地图：仓库结构、DSH 插件机制的关键坑、计费口径不变式、发布流程
+- [CHANGELOG.md](./CHANGELOG.md) — 版本变更记录
+- [Issues](https://github.com/WFMinerva/dsh-turn-cost/issues) — 维护 backlog
+
+本地跑测试：`node --test`（纯函数，零依赖零网络）。
+
 ## License
 
 [MIT](./LICENSE)
