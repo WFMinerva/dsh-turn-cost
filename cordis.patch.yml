@@ -1,0 +1,9 @@
+# dsh-turn-cost bundle patch — inserts the `turn-cost` row into the profile.
+#
+# Rates are the official DeepSeek CNY peak/off-peak card (2026-08-17), built
+# into the plugin; there is nothing to configure. The user layer of the
+# profile's cordis.patch.yml may override this row by id (`turn-cost`) if
+# needed — it is applied after bundle layers and the same-id row wins.
+- insert:
+    - id: turn-cost
+      name: 'dsh-turn-cost'
