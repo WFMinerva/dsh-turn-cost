@@ -20,12 +20,25 @@
   "keywords": [
     "dsh",
     "deepseek-harness",
-    "cost",
+    "deepseek",
+    "plugin",
     "token",
+    "cost",
+    "pricing",
     "billing",
-    "plugin"
+    "cny",
+    "usage"
   ],
   "license": "MIT",
+  "author": "WFMinerva",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/WFMinerva/dsh-turn-cost.git"
+  },
+  "homepage": "https://github.com/WFMinerva/dsh-turn-cost#readme",
+  "bugs": {
+    "url": "https://github.com/WFMinerva/dsh-turn-cost/issues"
+  },
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"

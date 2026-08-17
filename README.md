@@ -2,6 +2,8 @@
 
 DeepSeek Harness（dsh）Web UI 插件：在每一条 AI 回复下方的操作行里，显示**这一轮对话花了多少钱**。
 
+A [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (dsh) web plugin that shows **how much one turn of conversation really cost**, right under every assistant reply — in CNY at the [official DeepSeek peak/off-peak rates](https://api-docs.deepseek.com/quick_start/pricing/).
+
 > 本轮 ¥0.23 · 1.2万 token · 缓存读 98%
 
 - **人民币计价**，采用 [DeepSeek 官方定价](https://api-docs.deepseek.com/zh-cn/quick_start/pricing/)（2026-08-17 起生效的峰谷价：高峰 9:00–12:00、14:00–18:00 北京时间，其余时段为谷价的一半；跨峰谷的一轮按各步实际发生时间分别计价）
