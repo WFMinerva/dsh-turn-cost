@@ -1,5 +1,7 @@
 # dsh-turn-cost
 
+[![featured in awesome-dsh-plugin](https://img.shields.io/badge/awesome--dsh--plugin-featured-2ea44f)](https://github.com/beancookie/awesome-dsh-plugin)
+
 DeepSeek Harness（dsh）Web UI 插件：在每一条 AI 回复下方的操作行里，显示**这一轮对话花了多少钱**。
 
 A [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (dsh) web plugin that shows **how much one turn of conversation really cost**, right under every assistant reply — in CNY at the [official DeepSeek peak/off-peak rates](https://api-docs.deepseek.com/quick_start/pricing/).
