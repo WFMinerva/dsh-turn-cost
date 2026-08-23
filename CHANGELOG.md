@@ -4,9 +4,16 @@
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-08-23
+
 ### Added
 
 - GitHub Actions CI：push / pull_request 触发，`actions/setup-node` + `node --test`，把计费核心回归卡在合入前（#4）
+
+### Fixed
+
+- 按 DeepSeek 2026-08-23 新规，周六、周日全天使用空闲价；生效前的历史调用继续按旧时段计费
+- 峰谷判断改为显式换算北京时间，不再依赖运行 dsh 的宿主机时区
 
 ## [0.1.1] - 2026-08-17
 

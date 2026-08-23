@@ -1,6 +1,6 @@
 {
   "name": "dsh-turn-cost",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Per-turn estimated cost (CNY, official DeepSeek peak/off-peak rates) shown under each assistant reply in the dsh web UI",
   "type": "module",
   "main": "lib/index.js",

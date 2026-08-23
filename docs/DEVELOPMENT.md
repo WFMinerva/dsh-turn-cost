@@ -64,7 +64,7 @@
 
 - 会话日志是 zstd 多帧 JSONL（`session.jsonl.zstd`），帧魔数 `28 B5 2F FD`（小端 `0xFD2FB528`），用 node 内置 `node:zlib` 的 `zstdDecompressSync` 解帧。
 - **折叠规则**：按 `(turn, step)` 为键，后到的样本覆盖先到的（流式 chunk 的 usage 样本被该步最终的 `assistant/message` usage 取代）。**求和前必须先折叠**，否则同一步被重复计费。
-- **峰谷价**：官方 CNY 卡（api-docs.deepseek.com/zh-cn/quick_start/pricing/，2026-08-17 起生效）内置于 `OFFICIAL_CNY`（元/百万 token）。高峰 = 9:00–12:00、14:00–18:00（服务器本地时间＝北京时间），其余谷价。跨峰谷的一轮按**每步实际时间**分别计价。
+- **峰谷价**：官方 CNY 卡（api-docs.deepseek.com/zh-cn/quick_start/pricing/，2026-08-17 起生效）内置于 `OFFICIAL_CNY`（元/百万 token）。工作日高峰 = 9:00–12:00、14:00–18:00 北京时间；2026-08-23 00:00 北京时间起，周六、周日全天为空闲价。`isPeak` 用 UTC 时间戳换算北京时间，不依赖宿主机时区；生效点前仍保留旧的每日峰谷规则。跨峰谷的一轮按**每步实际时间**分别计价。
 - **未知模型**：`costOfStep` 返回 null，该步计入 `unpriced`、从金额里剔除——**绝不编造价格**，宁可不计价。
 - **数据源**：持久日志在 `<dsh-home>/sessions/<workspace>/<sessionId>/session.jsonl.zstd`；host 把它与运行中会话的 live 事件合并（同 `(turn, step)` live 胜出），签名缓存（`size:mtime` + live 事件数）失效重算。
 
@@ -72,7 +72,7 @@
 
 DeepSeek 调价（官网定价页变化）时：
 
-1. 改 `lib/fold.js` 的 `OFFICIAL_CNY`（窗口变了连 `isPeak` 一起改）；
+1. 改 `lib/fold.js` 的 `OFFICIAL_CNY`（窗口变了连 `isPeak` 与对应生效时间常量一起改，并保留历史规则）；
 2. 同步 README「计费口径」里的生效日期与链接；
 3. 写 CHANGELOG、bump 版本号；
 4. 发布 npm（见下）；

@@ -4,17 +4,26 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { ZSTD_MAGIC, isPeak, foldEvents, costOfStep, costOfTurn } from "../lib/fold.js";
+import {
+  ZSTD_MAGIC,
+  WEEKEND_OFF_PEAK_EFFECTIVE_MS,
+  isPeak,
+  foldEvents,
+  costOfStep,
+  costOfTurn,
+} from "../lib/fold.js";
 
-const T_PEAK = new Date(2026, 7, 17, 10, 0).getTime(); // 2026-08-17 10:00 local (Beijing)
-const T_OFF_PEAK = new Date(2026, 7, 17, 13, 0).getTime(); // 13:00 → off-peak
+const atBeijing = (year, month, day, hour, minute = 0) =>
+  Date.UTC(year, month - 1, day, hour - 8, minute);
+const T_PEAK = atBeijing(2026, 8, 17, 10); // Monday 10:00 Beijing
+const T_OFF_PEAK = atBeijing(2026, 8, 17, 13); // Monday 13:00 Beijing
 
 test("zstd magic is the documented little-endian frame magic", () => {
   assert.deepEqual([...ZSTD_MAGIC], [0x28, 0xb5, 0x2f, 0xfd]);
 });
 
-test("isPeak: 9–12 and 14–18 are peak, boundaries excluded", () => {
-  const at = (h, m = 0) => new Date(2026, 7, 17, h, m).getTime();
+test("isPeak: weekday 9–12 and 14–18 Beijing time are peak, boundaries excluded", () => {
+  const at = (h, m = 0) => atBeijing(2026, 8, 24, h, m);
   assert.equal(isPeak(at(8, 59)), false);
   assert.equal(isPeak(at(9, 0)), true);
   assert.equal(isPeak(at(11, 59)), true);
@@ -23,6 +32,21 @@ test("isPeak: 9–12 and 14–18 are peak, boundaries excluded", () => {
   assert.equal(isPeak(at(14, 0)), true);
   assert.equal(isPeak(at(17, 59)), true);
   assert.equal(isPeak(at(18, 0)), false);
+});
+
+test("isPeak: weekend becomes all off-peak at the official cutoff without rewriting history", () => {
+  assert.equal(WEEKEND_OFF_PEAK_EFFECTIVE_MS, atBeijing(2026, 8, 23, 0));
+  assert.equal(isPeak(atBeijing(2026, 8, 22, 10)), true); // Saturday before cutoff: old rule
+  assert.equal(isPeak(atBeijing(2026, 8, 23, 10)), false); // first effective Sunday
+  assert.equal(isPeak(atBeijing(2026, 8, 29, 10)), false); // Saturday after cutoff
+  assert.equal(isPeak(atBeijing(2026, 8, 30, 15)), false); // Sunday after cutoff
+  assert.equal(isPeak(atBeijing(2026, 8, 28, 10)), true); // Friday unchanged
+  assert.equal(isPeak(atBeijing(2026, 8, 31, 15)), true); // Monday unchanged
+});
+
+test("isPeak: Beijing schedule is independent of the host timezone", () => {
+  assert.equal(isPeak(Date.UTC(2026, 7, 24, 0, 59)), false); // 08:59 Beijing
+  assert.equal(isPeak(Date.UTC(2026, 7, 24, 1, 0)), true); // 09:00 Beijing
 });
 
 test("foldEvents: a later sample for the same (turn, step) replaces the earlier", () => {
@@ -55,6 +79,9 @@ test("costOfStep: peak vs off-peak at official CNY rates", () => {
   assert.ok(Math.abs(costOfStep({ ...base, time: T_PEAK }) - 9.0) < 1e-9);
   // off-peak input 4.5 yuan / 1M
   assert.ok(Math.abs(costOfStep({ ...base, time: T_OFF_PEAK }) - 4.5) < 1e-9);
+  // the same Saturday-morning call changes tier only after the new rule takes effect
+  assert.ok(Math.abs(costOfStep({ ...base, time: atBeijing(2026, 8, 22, 10) }) - 9.0) < 1e-9);
+  assert.ok(Math.abs(costOfStep({ ...base, time: atBeijing(2026, 8, 29, 10) }) - 4.5) < 1e-9);
 });
 
 test("costOfStep: unknown model or missing time yields null, never a fabricated price", () => {

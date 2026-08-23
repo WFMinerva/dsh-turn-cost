@@ -8,7 +8,7 @@ A [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (dsh) web 
 
 > 本轮 ¥0.23 · 1.2万 token · 缓存读 98%
 
-- **人民币计价**，采用 [DeepSeek 官方定价](https://api-docs.deepseek.com/zh-cn/quick_start/pricing/)（2026-08-17 起生效的峰谷价：高峰 9:00–12:00、14:00–18:00 北京时间，其余时段为谷价的一半；跨峰谷的一轮按各步实际发生时间分别计价）
+- **人民币计价**，采用 [DeepSeek 官方定价](https://api-docs.deepseek.com/zh-cn/quick_start/pricing/)（工作日高峰为 9:00–12:00、14:00–18:00 北京时间；2026-08-23 起周六、周日全天按空闲价；跨时段的一轮按各步实际发生时间分别计价）
 - 金额基于 **provider 上报的真实 usage**（未缓存输入 / 缓存读 / 输出分桶计费），不是估算 token 数
 - 一条用户消息引发的整轮（含中间工具步骤）合并计为一轮，绝不重复计
 - 打开旧会话时，历史每一轮同样显示
@@ -69,6 +69,7 @@ dsh plugin --profile web add dsh-turn-cost
 |---|---|
 | 一轮 | 用户一条消息 → AI 最终回复（中间工具步骤合并） |
 | 计费 | Σ 各步（未缓存输入×单价 + 缓存读×单价 + 输出×单价），跨峰谷按步时点 |
+| 时段 | 北京时间；2026-08-23 起周末全天空闲价，生效前历史调用仍按旧规则 |
 | 模型 | 按 `request/header` 记录的模型取价（内置 Pro / Flash 两档官方 CNY 价） |
 | 不计 | 脚本直连 API 的调用、其它机器的会话、无官方 CNY 价的模型 |
 
