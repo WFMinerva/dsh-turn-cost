@@ -147,7 +147,16 @@ dsh plugin --profile web add dsh-turn-cost
 - [CHANGELOG.md](./CHANGELOG.md) — 版本变更记录
 - [Issues](https://github.com/WFMinerva/dsh-turn-cost/issues) — 维护 backlog
 
-本地跑测试：先 `npm ci --ignore-scripts --no-audit --no-fund`，再运行 `node --test`；Windows 安装器夹具另运行 `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\test\windows-installer.test.ps1`。
+本地维护统一入口（推荐；Codex / Kimi Code / Claude Code / DSH / 纯人工 PowerShell 同一口径）：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File maintenance.ps1 verify                     # 确定性静态门禁（退出 0 才可交付）
+powershell -NoProfile -ExecutionPolicy Bypass -File maintenance.ps1 build -ReproducibilityCheck
+powershell -NoProfile -ExecutionPolicy Bypass -File maintenance.ps1 doctor                     # 只读环境体检
+powershell -NoProfile -ExecutionPolicy Bypass -File maintenance.ps1 acceptance                 # 实机验收（必须在 DSH 之外运行；原始报告不入库）
+```
+
+裸测试仍可单跑：先 `npm ci --ignore-scripts --no-audit --no-fund`，再 `node --test`；Windows 安装器夹具 `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\test\windows-installer.test.ps1`（端口注入隔离宿主，无需关闭 DSH）。
 
 ## License
 

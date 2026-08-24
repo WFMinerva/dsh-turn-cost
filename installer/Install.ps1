@@ -106,6 +106,9 @@ function Invoke-Dsh($Invocation, [string[]]$Arguments, [string]$Code) {
 }
 
 function Test-Port([int]$Port) {
+  # 测试夹具注入点：端口覆盖环境变量仅供 test/windows-installer.test.ps1 使用（夹具在 finally 中清除）；生产默认检查真实端口
+  $portOverride = $env:DTC_PORT_CHECK_OVERRIDE
+  if ($portOverride) { $Port = [int]$portOverride }
   try {
     $client = New-Object Net.Sockets.TcpClient
     $async = $client.BeginConnect('127.0.0.1', $Port, $null, $null)

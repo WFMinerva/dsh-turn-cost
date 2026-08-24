@@ -1,0 +1,52 @@
+﻿{
+    "schemaVersion":  1,
+    "sourceRepo":  "WFMinerva/tool-library",
+    "commit":  "246785c697ead77e8bc18c6db37a62c01c84d33c",
+    "generatedAt":  "2026-08-24T18:01:04.0800207Z",
+    "files":  [
+                  {
+                      "path":  "core.ps1",
+                      "sha256":  "7E33D832928AFE1D257D9ED7C9E679E530FF4F7D40027DA21624421B75AF0313"
+                  },
+                  {
+                      "path":  "vendor.ps1",
+                      "sha256":  "D81ADF24E5FD9A0BEE0493AFD61D8999DD5439F49A0B6F9E4649EEAACBB5E0CA"
+                  },
+                  {
+                      "path":  "redaction.ps1",
+                      "sha256":  "FBE829245E19CE9320483300F1C82036AEAE1F58F3CF1478D0C4D8FEE10F9FC6"
+                  },
+                  {
+                      "path":  "hashes.ps1",
+                      "sha256":  "B111DE315F5786D02CEA4CA823F10F14EB86F2FCDB08F5841AB798CC2273ACEA"
+                  },
+                  {
+                      "path":  "envprobe.ps1",
+                      "sha256":  "0D958A2EAF7EBDE546C5D952DC1BB5BC0C29483A6D664AC30422362AB44C34E9"
+                  },
+                  {
+                      "path":  "report.ps1",
+                      "sha256":  "034DD3FCB059AD5924A1B10FC10D583E3F481C75435693B76CF79DD1CD348E5D"
+                  },
+                  {
+                      "path":  "report.schema.json",
+                      "sha256":  "A1A57D303750445FE33AD9DC702D94D0C0926DC81F1A381DF6B807E1EDFAF52B"
+                  },
+                  {
+                      "path":  "redaction-rules.md",
+                      "sha256":  "BDF8D1254020425FBFC28C7EEC67B47E1B7E87F4A6394504C10964FAD90A57C1"
+                  },
+                  {
+                      "path":  "adapter.schema.json",
+                      "sha256":  "FD5DFAD2EE7EA7F824FCB0C3A3B3646A8327CBB4A7663577B5ECBC72D7D447BD"
+                  },
+                  {
+                      "path":  "templates/adapter.ps1.template",
+                      "sha256":  "6C5BCCB173D9FE7F91C19FF387C3218064BD7B40A9D3B9ACA82D43AFFDEBEE82"
+                  },
+                  {
+                      "path":  "templates/diagnostic-table.template.md",
+                      "sha256":  "25C81D3A88A66E56C52FCB7A749D1049E2129BD7D1987888EF757893B8B0A85A"
+                  }
+              ]
+}

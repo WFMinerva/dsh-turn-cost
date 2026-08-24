@@ -1,0 +1,21 @@
+{
+  "_authority": "部署固定项唯一权威源。插件版本唯一权威在 package.json（npm 生态要求），本文件不重复。派生文件（installer/dsh-package.json、installer/tools-package.json）与 lockfile 由 maintenance.ps1 sync-versions 重生成，勿手改。",
+  "dsh": {
+    "package": "@deepseek-ai/dsh",
+    "version": "0.1.1-rc.2"
+  },
+  "tools": {
+    "@moonshot-ai/kimi-code": "0.38.0",
+    "bailian-cli": "1.17.0"
+  },
+  "providers": [
+    "deepseek-official",
+    "kimi-coding",
+    "qwen-token-plan-cn",
+    "qwen-token-plan"
+  ],
+  "node": {
+    "expected_major": 24,
+    "npm": "11.16.0"
+  }
+}

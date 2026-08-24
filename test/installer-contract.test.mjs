@@ -48,3 +48,31 @@ test("Windows entry scripts stay process-scoped and do not create persistence", 
   assert.doesNotMatch(combined, /New-NetFirewallRule|netsh\s+advfirewall/i);
   assert.match(launch, /127\.0\.0\.1:58627/);
 });
+
+test("versions.json is the single deployment pin source and every derived file agrees", async () => {
+  const versions = await json("../versions.json");
+  const dshPkg = await json("../installer/dsh-package.json");
+  const toolsPkg = await json("../installer/tools-package.json");
+  const toolsLock = await json("../installer/tools-package-lock.json");
+  const pkg = await json("../package.json");
+  const lock = await json("../package-lock.json");
+  const dshLock = await readFile(new URL("../installer/dsh-package-lock.yaml", import.meta.url), "utf8");
+  const build = await readFile(new URL("../scripts/build-windows-installer.ps1", import.meta.url), "utf8");
+  assert.match(String(dshPkg._generated), /versions\.json/);
+  assert.match(String(toolsPkg._generated), /versions\.json/);
+  assert.equal(dshPkg.dependencies[versions.dsh.package], versions.dsh.version);
+  assert.deepEqual(toolsPkg.dependencies, versions.tools);
+  assert.deepEqual(toolsLock.packages[""].dependencies, versions.tools);
+  assert.match(dshLock, new RegExp(`specifier: ${versions.dsh.version.replace(/\./g, "\\.")}`));
+  assert.equal(pkg.version, lock.version);
+  assert.match(build, /versions\.json/);
+  assert.doesNotMatch(build, /'deepseek-official'/);
+});
+
+test("port check injection point is fixture-only and single-referenced", async () => {
+  const install = await readFile(new URL("../installer/Install.ps1", import.meta.url), "utf8");
+  assert.equal((install.match(/DTC_PORT_CHECK_OVERRIDE/g) || []).length, 1);
+  const fixture = await readFile(new URL("./windows-installer.test.ps1", import.meta.url), "utf8");
+  assert.match(fixture, /Remove-Item Env:DTC_PORT_CHECK_OVERRIDE/);
+  assert.match(fixture, /\$env:DTC_PORT_CHECK_OVERRIDE = /);
+});

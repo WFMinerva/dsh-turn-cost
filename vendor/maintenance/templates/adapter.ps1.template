@@ -1,0 +1,51 @@
+# <项目名> 维护适配层模板（统一维护基础设施）
+# 用法：复制为 <项目仓库>/maintenance/adapter.ps1，把 vendor 发布进来（通用层仓库执行
+#   maintenance.ps1 publish-vendor -Target <项目仓库根>），再按本项目实现各钩子。
+# 契约：vendor/maintenance/adapter.schema.json；命令入口：项目根 maintenance.ps1。
+# 纪律：不改 vendor/；不复制通用层函数体；报告字段白名单；凭据零接触。
+
+function Get-AdapterInfo {
+  # 例：读项目清单返回名称与版本
+  return [pscustomobject]@{ name = '<项目名>'; version = '0.0.0' }
+}
+
+function Get-VerifySteps {
+  return @(
+    @{ id = '<unit-tests>'; run = {
+        # 例：& node --test；失败抛出
+        return [pscustomobject]@{ status = 'PASS'; summary = '一行说明' }
+      } }
+  )
+}
+
+function Invoke-AdapterBuild {
+  param([switch]$ReproducibilityCheck)
+  # 产制品到 gitignored 目录；双构建哈希相等检查在此实现（如需要）
+}
+
+function Get-Artifacts {
+  return @()  # 仓库相对路径列表
+}
+
+function Get-AcceptanceStages {
+  # 阶段按序执行；失败后依赖阶段由通用层自动 SKIP；清理在 Invoke-AdapterCleanup
+  return @(
+    @{ id = 'precheck'; run = {
+        # 端口空闲断言、凭据存在性（只存在性，绝不读内容）
+        return @{ status = 'PASS'; summary = '一行说明'; code = $null }
+      } }
+  )
+}
+
+function Invoke-AdapterCleanup {
+  # finally 必然执行、必须幂等；只停本次验收启动的服务；失败抛出（记 CLEANUP_FAILED）
+  return @{ status = 'PASS'; summary = '无需清理' }
+}
+
+function Get-SelfTestSteps {
+  return @()
+}
+
+function Get-DoctorSteps {
+  return @()
+}

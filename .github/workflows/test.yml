@@ -38,10 +38,15 @@ jobs:
             node --check "$file"
           done
   windows-installer:
-    name: Windows installer transaction tests
+    name: Windows unified maintenance verify (same entry as local)
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Run PowerShell 5.1 installer fixtures
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.18.0
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Run unified maintenance verify
         shell: powershell
-        run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File test/windows-installer.test.ps1
+        run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File maintenance.ps1 verify

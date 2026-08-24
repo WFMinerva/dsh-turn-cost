@@ -1,0 +1,32 @@
+{
+  "_note": "示例报告（虚构数据）：展示 acceptance-report.json 的 schema 与脱敏口径。真实原始报告不入库（.gitignore）；发布证据需经脱敏校验后显式复制为 evidence/<日期>-<版本>.json。",
+  "schema_version": 1,
+  "command": "acceptance",
+  "adapter": { "name": "dsh-turn-cost", "version": "0.4.0" },
+  "core": { "vendor_commit": "0000000000000000000000000000000000000000", "schema_version": 1 },
+  "machine": {
+    "class": "home",
+    "fingerprint": "Example Vendor | Example Board B760M | Example CPU i0-0000",
+    "os_build": "99999",
+    "powershell": "5.1.99999.9999"
+  },
+  "started_at": "2026-01-01T00:00:00.0000000Z",
+  "finished_at": "2026-01-01T00:12:00.0000000Z",
+  "checks": [
+    { "id": "precheck", "status": "PASS", "code": null, "summary": "前置通过；制品 dsh-turn-cost-setup-0.4.0-win-x64.zip；安装前基线哈希已登记（不回显）", "detail": "前置通过；制品 dsh-turn-cost-setup-0.4.0-win-x64.zip；安装前基线哈希已登记（不回显）" },
+    { "id": "install", "status": "PASS", "code": null, "summary": "安装成功；回滚点与 DSH 入口已登记", "detail": "安装成功；回滚点与 DSH 入口已登记" },
+    { "id": "reinstall", "status": "PASS", "code": null, "summary": "幂等重跑成功；回滚点不变", "detail": "幂等重跑成功；回滚点不变" },
+    { "id": "start", "status": "PASS", "code": null, "summary": "启动成功；Kimi 由本链启动=True", "detail": "启动成功；Kimi 由本链启动=True" },
+    { "id": "probe", "status": "PASS", "code": null, "summary": "DSH HTTP 200；Kimi meta/usage code=0；bl usage 正常（remainingPercent 已读取）", "detail": "DSH HTTP 200；Kimi meta/usage code=0；bl usage 正常（remainingPercent 已读取）" },
+    { "id": "stop", "status": "PASS", "code": null, "summary": "退出成功；本链服务经官方端点/进程句柄停止", "detail": "退出成功；本链服务经官方端点/进程句柄停止" },
+    { "id": "port-residue", "status": "PASS", "code": null, "summary": "3080 已释放；58627 已释放", "detail": "3080 已释放；58627 已释放" },
+    { "id": "rollback", "status": "PASS", "code": null, "summary": "回滚成功；profile 哈希与安装前基线精确相等", "detail": "回滚成功；profile 哈希与安装前基线精确相等" },
+    { "id": "reinstall-after-rollback", "status": "PASS", "code": null, "summary": "回滚后再安装成功", "detail": "回滚后再安装成功" }
+  ],
+  "artifacts": [
+    { "path": "dist/dsh-turn-cost-setup-0.4.0-win-x64.zip", "sha256": "0000000000000000000000000000000000000000000000000000000000000000" }
+  ],
+  "skipped": [],
+  "cleanup": { "status": "PASS", "detail": "清理完成：进程/端口/临时目录均已恢复" },
+  "exit_code": 0
+}

@@ -1,0 +1,79 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "acceptance-report",
+  "description": "统一维护基础设施验收报告。所有字符串字段写出前统一过脱敏出口；artifact 只准仓库相对路径；机器指纹只含型号串白名单字段。原始报告文件不入库（.gitignore），入库示例用虚构数据。",
+  "type": "object",
+  "required": ["schema_version", "command", "machine", "started_at", "finished_at", "checks", "artifacts", "skipped", "exit_code"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "type": "integer", "const": 1 },
+    "command": { "type": "string" },
+    "adapter": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "properties": { "name": { "type": "string" }, "version": { "type": "string" } },
+      "required": ["name", "version"]
+    },
+    "core": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "properties": { "vendor_commit": { "type": ["string", "null"] }, "schema_version": { "type": "integer" } }
+    },
+    "machine": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["class", "fingerprint", "powershell"],
+      "properties": {
+        "class": { "type": "string", "enum": ["home", "unit", "laptop", "unknown"] },
+        "fingerprint": { "type": "string", "description": "注册表型号/CPU 串（同源 checks.py _hardware_fingerprint）；禁止序列号/UUID/MAC/机器名/用户名" },
+        "os_build": { "type": ["string", "null"] },
+        "powershell": { "type": "string" }
+      }
+    },
+    "started_at": { "type": "string" },
+    "finished_at": { "type": ["string", "null"] },
+    "checks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "status", "summary"],
+        "properties": {
+          "id": { "type": "string" },
+          "status": { "type": "string", "enum": ["PASS", "WARN", "FAIL", "SKIP"] },
+          "code": { "type": ["string", "null"], "description": "固定错误码（诊断表入口），不携带自由文本" },
+          "summary": { "type": "string", "maxLength": 200 },
+          "detail": { "type": "string", "maxLength": 201 }
+        }
+      }
+    },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "sha256"],
+        "properties": {
+          "path": { "type": "string", "pattern": "^[^/\\\\][^\\\\]*$", "description": "仓库相对路径（正斜杠，禁止绝对路径与 ..）" },
+          "sha256": { "type": "string", "pattern": "^[0-9A-F]{64}$" }
+        }
+      }
+    },
+    "skipped": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "reason"],
+        "properties": { "id": { "type": "string" }, "reason": { "type": "string" } }
+      }
+    },
+    "cleanup": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["status", "detail"],
+      "properties": { "status": { "type": "string", "enum": ["PASS", "WARN", "FAIL"] }, "detail": { "type": "string" } }
+    },
+    "exit_code": { "type": "integer", "enum": [0, 1, 2] }
+  }
+}

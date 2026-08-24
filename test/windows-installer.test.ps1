@@ -16,6 +16,13 @@ $profile = Join-Path $testDshHome 'profiles\web'
 $oldPath = $env:Path
 $oldHome = $env:DSH_HOME
 
+# 端口注入：夹具不依赖宿主 3080/58627（踩坑 7 根治）；生产默认仍检查真实端口，变量在 finally 清除
+$portProbe = New-Object Net.Sockets.TcpListener([Net.IPAddress]::Loopback, 0)
+$portProbe.Start()
+$injectedPort = $portProbe.LocalEndpoint.Port
+$portProbe.Stop()
+$env:DTC_PORT_CHECK_OVERRIDE = [string]$injectedPort
+
 try {
   New-Item -ItemType Directory -Force -Path $fixture,$fakeBin,(Join-Path $fixture 'payload'),$profile | Out-Null
   Get-ChildItem -LiteralPath (Join-Path $repo 'installer') -Force | ForEach-Object {
@@ -92,6 +99,17 @@ exit /b %errorlevel%
   $env:Path = "$fakeBin;$oldPath"
   $env:DSH_HOME = $testDshHome
 
+  # 守卫自测：注入端口被占用时安装必须被拒（守卫本身成为被测对象）
+  $guardListener = New-Object Net.Sockets.TcpListener([Net.IPAddress]::Loopback, $injectedPort)
+  $guardListener.Start()
+  $savedPreference = $ErrorActionPreference
+  $ErrorActionPreference = 'Continue'
+  & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $fixture 'Install.ps1') -Mode Install -PackageRoot $fixture -NonInteractive 2>$null
+  $guardExit = $LASTEXITCODE
+  $ErrorActionPreference = $savedPreference
+  $guardListener.Stop()
+  Assert-True ($guardExit -ne 0) 'port guard rejects install when injected port is busy'
+
   & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $fixture 'Install.ps1') -Mode Install -PackageRoot $fixture -NonInteractive
   Assert-True ($LASTEXITCODE -eq 0) 'fresh install exits zero'
   $installed = Get-Content -Raw -LiteralPath (Join-Path $profile 'package.json') | ConvertFrom-Json
@@ -150,5 +168,6 @@ exit /b %errorlevel%
   if ($null -ne $oldPath) { $env:Path = $oldPath }
   if ($null -ne $oldHome) { $env:DSH_HOME = $oldHome } else { Remove-Item Env:DSH_HOME -ErrorAction SilentlyContinue }
   Remove-Item Env:FAKE_DSH_FAIL_ADD -ErrorAction SilentlyContinue
+  Remove-Item Env:DTC_PORT_CHECK_OVERRIDE -ErrorAction SilentlyContinue
   if (Test-Path -LiteralPath $temp) { Remove-Item -LiteralPath $temp -Recurse -Force }
 }

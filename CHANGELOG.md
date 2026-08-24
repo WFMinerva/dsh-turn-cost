@@ -4,6 +4,13 @@
 
 ## [Unreleased]
 
+### Added
+
+- 统一维护入口 `maintenance.ps1`（通用层来自 tool-library，vendor 快照随仓库提交、哈希防漂移）：`verify` 确定性静态门禁（单测/合同/PS 语法+BOM/versions 相等/安装事务夹具）、`build`（确定性 ZIP + `-ReproducibilityCheck` 双构建整包哈希相等测试）、`acceptance` 实机验收链（安装→幂等重跑→启动→三路探测→退出→端口残留→回滚哈希核对→再安装，原始报告脱敏且不入库）、`doctor` 只读体检、`sync-versions`（bundled pnpm 重生成 lockfile）。
+- `versions.json`：部署固定项唯一权威源；`installer/dsh-package.json`、`installer/tools-package.json` 为派生文件（合同测试断言全链相等）；插件版本唯一权威仍在 `package.json`。
+- 夹具端口注入：安装事务夹具不再依赖宿主 3080 状态，守卫本身成为被测对象；生产默认仍检查真实端口。
+- `maintenance/diagnostic-table.md` 固定错误码诊断表与 `evidence/example-report.json` 示例报告（虚构数据）。
+
 ## [0.4.0] - 2026-08-24
 
 ### Added

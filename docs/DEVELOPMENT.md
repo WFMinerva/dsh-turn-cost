@@ -13,8 +13,12 @@
 | `cordis.patch.yml` | bundle patch：往 profile 插入一行 `turn-cost` | 用户层可用同 id 覆盖（用户层后应用、同 id 行胜出） |
 | `test/fold.test.mjs` | `fold.js` 的纯函数单测 | `node --test test/` 运行，无网络无依赖 |
 | `installer/` | Windows 一键安装、启动、回滚、卸载与固定 CLI lockfile | PowerShell 5.1 脚本必须保留 UTF-8 BOM；不得读写 `.credentials.yaml` |
-| `scripts/build-windows-installer.ps1` | 运行测试、`npm pack`、生成内容哈希并组装 ZIP | `dist/` 为构建产物，不入库 |
-| `test/windows-installer.test.ps1` | 临时 `DSH_HOME` 的事务/所有权回归 | 必须在 Windows PowerShell 5.1 下运行 |
+| `scripts/build-windows-installer.ps1` | 运行测试、`npm pack`、生成内容哈希并组装 ZIP | 版本只读 `versions.json`+`package.json`；ZIP 为确定性组装；`-ReproducibilityCheck` 跑双构建整包哈希相等测试；`dist/` 为构建产物，不入库 |
+| `test/windows-installer.test.ps1` | 临时 `DSH_HOME` 的事务/所有权回归 | 必须在 Windows PowerShell 5.1 下运行；端口注入（`DTC_PORT_CHECK_OVERRIDE`，finally 清除）隔离宿主 3080，无需关闭 DSH |
+| `versions.json` | 部署固定项唯一权威源（DSH/Kimi/百炼 CLI、providers、node 期望） | 插件版本不在此（唯一权威在 `package.json`）；改 CLI 固定版本只改这里再跑 `sync-versions` |
+| `maintenance.ps1` + `maintenance/` | 统一维护入口（薄路由）+ 项目适配层（verify/build/acceptance/doctor/sync-versions 钩子） | 核心逻辑在 `vendor/maintenance/`，禁止手改；诊断表 `maintenance/diagnostic-table.md` |
+| `vendor/maintenance/` + `vendor/manifest.json` | tool-library 通用层快照 + 来源 commit/哈希清单 | 由 tool-library `publish-vendor` 从干净提交发布；`verify` 逐项哈希互校，手改即 FAIL |
+| `evidence/` | 版本化验收证据（脱敏后显式复制） | 原始 `acceptance-report.json` 在 `.gitignore`，不入库；示例 `example-report.json` 为虚构数据 |
 | `package.json` | 双重身份：npm 包清单 + DSH bundle 清单（`dsh` 字段） | `files` 白名单只有 `lib` 和 `cordis.patch.yml`；docs/test 只进 GitHub 不进 npm（有意为之） |
 
 ## 二、DSH 插件机制（本插件踩过的关键点）
