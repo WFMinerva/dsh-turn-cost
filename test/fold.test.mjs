@@ -21,6 +21,8 @@ import {
   isValidSessionId,
   findSessionFile,
   requestsInWindow,
+  builtinQuotaRoutes,
+  mergeQuotaRoutes,
   quotaConfigOf,
   QUOTA_KINDS,
 } from "../lib/fold.js";
@@ -338,4 +340,25 @@ test("quotaConfigOf: quota routes validated; absent blocks → empty table", () 
 test("quotaConfigOf: prototype-name keys never leak", () => {
   const parsed = JSON.parse(`{"quota":{"__proto__":{"kind":"kimi-usages"},"constructor":{"kind":"aliyun-bl"}}}`);
   assert.deepEqual(Object.keys(quotaConfigOf(parsed)), []);
+});
+
+test("built-in quota routes work without a per-machine rates file", () => {
+  assert.deepEqual(builtinQuotaRoutes(), {
+    "kimi-coding": { kind: "kimi-usages" },
+    "qwen-token-plan-cn": { kind: "aliyun-bl" },
+  });
+  assert.notEqual(builtinQuotaRoutes(), builtinQuotaRoutes());
+});
+
+test("mergeQuotaRoutes: valid overrides win and enabled=false opts out", () => {
+  const merged = mergeQuotaRoutes(builtinQuotaRoutes(), { quota: {
+    "kimi-coding": { kind: "kimi-usages", baseUrl: "http://localhost:58628" },
+    "qwen-token-plan-cn": { enabled: false },
+    private: { kind: "aliyun-bl", command: "bl-private" },
+    malformed: { kind: "unknown" },
+  } });
+  assert.deepEqual(merged, {
+    "kimi-coding": { kind: "kimi-usages", baseUrl: "http://localhost:58628" },
+    private: { kind: "aliyun-bl", command: "bl-private" },
+  });
 });

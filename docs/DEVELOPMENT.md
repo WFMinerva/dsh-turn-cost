@@ -12,6 +12,9 @@
 | `lib/client.js` | 浏览器 bundle：`assistant-actions` 槽位里的灰色金额行 | 手工写的 `window.__ModuleLoader__` CJS 格式，**不需要打包器** |
 | `cordis.patch.yml` | bundle patch：往 profile 插入一行 `turn-cost` | 用户层可用同 id 覆盖（用户层后应用、同 id 行胜出） |
 | `test/fold.test.mjs` | `fold.js` 的纯函数单测 | `node --test test/` 运行，无网络无依赖 |
+| `installer/` | Windows 一键安装、启动、回滚、卸载与固定 CLI lockfile | PowerShell 5.1 脚本必须保留 UTF-8 BOM；不得读写 `.credentials.yaml` |
+| `scripts/build-windows-installer.ps1` | 运行测试、`npm pack`、生成内容哈希并组装 ZIP | `dist/` 为构建产物，不入库 |
+| `test/windows-installer.test.ps1` | 临时 `DSH_HOME` 的事务/所有权回归 | 必须在 Windows PowerShell 5.1 下运行 |
 | `package.json` | 双重身份：npm 包清单 + DSH bundle 清单（`dsh` 字段） | `files` 白名单只有 `lib` 和 `cordis.patch.yml`；docs/test 只进 GitHub 不进 npm（有意为之） |
 
 ## 二、DSH 插件机制（本插件踩过的关键点）
@@ -101,6 +104,8 @@ node --check lib/index.js
 node --check lib/client.js
 node --check lib/fold.js
 node --check lib/quota.js
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\test\windows-installer.test.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\build-windows-installer.ps1
 ```
 
 用真实日志抽查（node 一行脚本）：读某会话的 `session.jsonl.zstd` → `readSessionSamples("<sessions根目录>", "<sessionId>")` → `costOfTurn(samples, 轮号)`，核对 token 数与金额。
@@ -136,6 +141,7 @@ node --check lib/quota.js
 18. **为什么阿里 Token Plan 不做单对话占比？** Credits 按模型分档动态抵扣（思考模式/工具调用影响），官方无公开系数表、明说「以控制台为准」，且实测 qwen 路由日志 usage 只有 token 四桶、无 Credits 字段——精确归因不可得，门二 v2 拍板不做（不编造），只显示窗口已用/剩余。
 19. **为什么 Kimi 不再读取 DSH 的模型 API key？** 官方公开的程序化额度接口是 Kimi Code 本地服务 `GET /api/v1/oauth/usage`，依赖 CLI `/login` 的托管 OAuth；模型 API key 直连远端 `/usages` 未获官方文档承诺且家用机实测 401。插件只读 `~/.kimi-code/server.token` 并访问 loopback，不读取 DSH 模型密钥。
 20. **为什么金额不设全局开关、而是按路由分流？**（0.3.0 门三修正）最初门二 v2 拍「金额默认隐藏可配置」，但机主实测发现这会把官方按量 DeepSeek 的金额也藏掉（那是 0.1.3 起就在的正确功能）。修正后：金额跟随「该轮 provider 是否按量计费」——官方按量路由 `cost>0` 即显示 ¥；订阅路由 0 价登记 → 只显 token + 额度占比。不要再引入会覆盖官方按量金额的全局开关。
+21. **为什么一键包固定并隔离 DSH/Kimi/百炼 CLI？**（0.4.0）跨机不能依赖 PATH、全局 npm 或临时 tgz 路径。安装器把完整载荷固化到 DSH home，用 lockfile 安装私有工具，并让 profile 只引用永久载荷；API Key 与 OAuth 仍由各官方入口人工完成。pnpm 11 的构建脚本许可必须写在 `pnpm-workspace.yaml` 的 `allowBuilds`，旧 `onlyBuiltDependencies` 在 pnpm 11 已失效。
 
 ## 七、0.2.0 新增件的维护要点
 

@@ -1,0 +1,10 @@
+{
+  "name": "dsh-turn-cost-private-tools",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Pinned private CLI tools used by the dsh-turn-cost Windows launcher",
+  "dependencies": {
+    "@moonshot-ai/kimi-code": "0.38.0",
+    "bailian-cli": "1.17.0"
+  }
+}

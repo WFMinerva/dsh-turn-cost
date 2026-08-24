@@ -4,6 +4,25 @@
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-08-24
+
+### Added
+
+- Windows 一键部署 ZIP：事务备份、固定 DSH/Kimi/百炼 CLI、安装/启动/补齐 CLI/回滚/卸载入口，以及逐文件 SHA-256 内容清单。
+- `kimi-coding` 与 `qwen-token-plan-cn` 内置额度路由；自定义路由可覆盖，`enabled: false` 可显式退出。
+- Windows 临时 `DSH_HOME` 安装器夹具与 CI 门禁，覆盖幂等、永久载荷路径、篡改拒绝、失败回滚、凭据/settings 不变和卸载所有权。
+
+### Changed
+
+- 插件版本升至 0.4.0；安装器固定 DSH `0.1.1-rc.2`、Kimi Code `0.38.0`、百炼 CLI `1.17.0`，均使用 lockfile。
+- Kimi 服务由专用启动器按需启动；仅关闭本启动器创建的实例，且官方 shutdown 请求使用 JSON content type/body。
+
+### Fixed
+
+- 避免 profile 依赖指向临时解压目录；安装前先把完整载荷原子固化到 `~/.dsh/turn-cost-installer-package`。
+- 收紧同哈希幂等判断，防止回滚到旧插件后仅凭 bundle 名误判已安装。
+- pnpm 11 使用 `allowBuilds` 明确批准 DSH 必需的五个构建依赖；PowerShell 5.1 脚本统一 UTF-8 BOM。
+
 ## [0.3.0] - 2026-08-24
 
 ### Added

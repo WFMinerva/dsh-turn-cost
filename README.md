@@ -8,7 +8,7 @@ A [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (dsh) web 
 
 > 官方按量：本轮 ¥0.23 · 1.2万 token · 缓存读 98% ／ Kimi 订阅：本轮 12.3万 token · 5h 已用 12% · 剩余 88% ／ Qwen 订阅：本轮 3.4万 token · 剩余 40%
 
-- **订阅额度窗口（0.3.0）**：Kimi 订阅走官方 Kimi Code 本地 OAuth 服务读取 5 小时/7 天窗口与加油包；阿里 Token Plan 走官方 `bl usage token-plan` CLI——见下文「订阅额度窗口」
+- **订阅额度窗口（0.4.0）**：内置 `kimi-coding` 与 `qwen-token-plan-cn` 标准路由；Kimi 走官方 Kimi Code 本地 OAuth 服务读取 5 小时/7 天窗口与加油包，阿里 Token Plan 走官方 `bl usage token-plan` CLI
 - **不编造单轮额度归因**：官方接口只给账号窗口已用/剩余，不给某一轮的可靠扣减；Kimi 徽章显示当前 5h 窗口已用/剩余，阿里徽章显示当前剩余比例
 - **人民币计价**，内置 [DeepSeek 官方定价](https://api-docs.deepseek.com/zh-cn/quick_start/pricing/)（峰谷按北京时间）——官方按量路由显示金额，订阅路由按 0 价登记只显 token
 - **自定义费率表**：任意模型可配单价（含缓存写），订阅制模型按 0 价登记只显 token
@@ -36,16 +36,18 @@ A [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (dsh) web 
 - token 数为总消耗（万为单位），口径与 dsh 官方统计条逐桶一致
 - 缓存读占比 = 缓存命中 token ÷（缓存命中 + 未命中输入），一眼看出长对话的省钱效果
 
-## 订阅额度窗口（0.3.0）
+## 订阅额度窗口（0.4.0）
 
-在费率表 JSON 里加 `quota` 块（键 = DSH 的 provider 路由名）：
+标准路由无需每台机器另配 `ratesPath`：插件默认启用 `kimi-coding → kimi-usages` 与 `qwen-token-plan-cn → aliyun-bl`。费率表 JSON 的 `quota` 块只用于覆盖默认值、增加其他路由或显式禁用：
 
 ```json
 "quota": {
   "kimi-coding": { "kind": "kimi-usages" },
-  "qwen-token-plan-cn": { "kind": "aliyun-bl" }
+  "qwen-token-plan-cn": { "enabled": false }
 }
 ```
+
+上例保留 Kimi 默认读取，并关闭 Qwen 自动额度读取。合法自定义项覆盖默认项；畸形项不会擦除安全默认值。
 
 - **kimi-usages**：先安装并登录官方 Kimi Code CLI，运行 `kimi web --no-open`；插件只连接 `http://127.0.0.1:58627/api/v1/oauth/usage`，从 `~/.kimi-code/server.token` 读取本地 bearer（不回显）。可用 `baseUrl` 改 loopback 端口，但远程 URL 会被配置守卫拒绝；成功结果缓存 60 秒
 - **aliyun-bl**：调官方百炼 CLI `bl usage token-plan --output json`（先 `npm i -g bailian-cli` 并完成控制台登录；可用 `command` 改可执行名）。未安装/未登录/输出不认得都安静降级为「暂读不到」
@@ -96,7 +98,7 @@ A [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (dsh) web 
 **只读本机数据；Kimi 额度只访问 loopback 官方服务，阿里额度由本机官方 CLI 访问其服务。**
 
 - token 账与金额来自本机 dsh 会话日志与本机费率表 JSON，不出本机
-- 0.3.0 起若配置 `quota` 块：Kimi 路由只访问 `127.0.0.1`/ `localhost` 的官方 Kimi Code Server，由该服务持有 OAuth 与上游通信；阿里路由由本机官方 `bl` CLI 与其控制台会话通信
+- 0.4.0 起标准额度路由默认启用：Kimi 路由只访问 `127.0.0.1`/ `localhost` 的官方 Kimi Code Server，由该服务持有 OAuth 与上游通信；阿里路由由本机官方 `bl` CLI 与其控制台会话通信
 - 插件不再读取 Kimi 模型 API key；本地 server token 只用于 loopback 请求，**不打印、不进入 Remote 响应**
 - 界面上的金额是**估计值**（provider 上报 token 数 × 费率表单价），仅供个人参考，不构成账单；订阅套餐的实际额度以平台官方读数为准
 
@@ -113,7 +115,16 @@ A [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (dsh) web 
 
 ## 安装
 
-### 方式一：npm（推荐）
+### 方式一：Windows 一键包（推荐）
+
+1. 解压 `dsh-turn-cost-setup-0.4.0-win-x64.zip`，双击 `安装.cmd`；不要直接在 ZIP 预览器里运行。
+2. 安装器会备份 web profile、安装固定插件包与隔离的 DSH/Kimi/百炼 CLI，并生成 `~/.dsh/turn-cost-launcher/启动 DSH（含额度）.cmd`。
+3. API Key 仍由你在 DSH「设置 → 模型」里手动输入；Kimi 额度另需 `kimi login`，Qwen 额度另需 `bl auth login --console --console-site domestic`。安装器不会读取或写入 `.credentials.yaml`。
+4. 日常从“启动 DSH（含额度）”启动；需要恢复时运行同目录的“回滚上一次安装”或“卸载”。
+
+安装器不需要管理员权限，不改全局 npm、代理、防火墙、系统执行策略或开机任务。完整说明见 ZIP 内 `README-安装说明.txt`。
+
+### 方式二：npm
 
 ```bash
 dsh plugin --profile web add dsh-turn-cost
@@ -122,7 +133,7 @@ dsh plugin --profile web add dsh-turn-cost
 
 然后重启 dsh web 并刷新页面。
 
-### 方式二：本地文件式
+### 方式三：本地文件式
 
 1. 把本仓库整个目录放到 `<dsh-home>/profiles/web/node_modules/dsh-turn-cost/`
 2. 在 `<dsh-home>/profiles/web/package.json` 的 `dsh.profile.bundles` 数组末尾追加 `"dsh-turn-cost"`
@@ -136,7 +147,7 @@ dsh plugin --profile web add dsh-turn-cost
 - [CHANGELOG.md](./CHANGELOG.md) — 版本变更记录
 - [Issues](https://github.com/WFMinerva/dsh-turn-cost/issues) — 维护 backlog
 
-本地跑测试：`node --test`（纯函数，零依赖零网络）。
+本地跑测试：先 `npm ci --ignore-scripts --no-audit --no-fund`，再运行 `node --test`；Windows 安装器夹具另运行 `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\test\windows-installer.test.ps1`。
 
 ## License
 

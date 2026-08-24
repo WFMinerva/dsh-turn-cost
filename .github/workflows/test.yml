@@ -37,3 +37,11 @@ jobs:
           for file in lib/index.js lib/client.js lib/fold.js lib/quota.js; do
             node --check "$file"
           done
+  windows-installer:
+    name: Windows installer transaction tests
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run PowerShell 5.1 installer fixtures
+        shell: powershell
+        run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File test/windows-installer.test.ps1

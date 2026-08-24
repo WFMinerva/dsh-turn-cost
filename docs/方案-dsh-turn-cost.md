@@ -393,3 +393,122 @@ B 轻流程（改 bug），机主一句话对齐后修复+复检；本记录按 
 - **自动回归**：新增 loopback HTTP + server token 真实 seam；全量测试 46/46，四个 lib 文件语法检查和 `git diff --check` 通过；根 `python tools/checks.py --json` 为 0 FAIL/C7 WARN（根清单与嵌套项目均有本轮未提交改动）。最终候选 SHA-256 为 `381B5FCBC396A794F4C8716A18B800FB8A388C7C23BF6586D80F75322AD3E9D7`。
 - **运行边界**：turn-cost 不擅自启动、登录或长期管理 Kimi 服务；使用 Kimi 额度显示前，由机主运行 `kimi web --no-open`。服务未运行或 token 缺失时只返回固定错误码，不影响 DSH 对话。实测结束后 DSH 3080 与 Kimi 58627 监听均为 0。
 - **门禁**：机主于 2026-08-24 确认门三；本变更正式交付。未提交、未推送、未发布 npm 的状态在后续维护基线中另行记录。
+
+## 变更记录 #9（2026-08-24，Windows 跨机一键部署包；门二已拍板）
+
+### 状态与需求对齐（门一已确认）
+
+- **状态**：门一与门二均由机主于 2026-08-24 确认；已进入实施，尚未形成门三交付结论。
+- **目标机器**：单位机、笔记本；家用机作为首轮实现与破坏性边界验证环境。三机均为 Windows 且已有 DSH，但机器路径、代理和凭据不共享。
+- **目标**：交付一个可放 U 盘的 Windows ZIP。用户双击后，自动识别 DSH home/web profile、备份旧状态、安装固定候选 `.tgz`、准备 Kimi/Qwen 额度所需 CLI、生成“启动 DSH（含 Kimi 用量）”和回滚/卸载入口，并给出脱敏验收结果。
+- **人工步骤**：模型 API Key 仍由机主在 DSH“设置 → 模型”页输入；Kimi 套餐用量另走 Kimi Code OAuth，Qwen 套餐用量另走百炼控制台 OAuth。三类凭据不得混为一谈，也不得由安装器读取、代填、复制或写入日志。
+- **不做**：不改 DeepSeek 和其他已有模型；不改系统代理、防火墙、WSL、Docker、系统执行策略或开机计划任务；不要求管理员；不发布 npm；未获“推送”指令不推 GitHub。
+- **流程级别**：本维护跨机、涉及安装和凭据边界、预计超过 5 文件，触发门二。恢复常规 K3 双层复检；上一轮“以机主实测替代新 K3”不延续到本轮。
+
+### 基线
+
+- 上一轮 Kimi 官方 OAuth 修复经门三确认后，已固化为本地提交 `93bef4293249bf58943ed87157e8c74cc7f55874`（未推送）；基线 `node --test` 为 **46/46 通过**，嵌套仓库工作区干净、当前分支比远端候选分支 ahead 1。
+- 根工具库的对应登记已固化为本地提交 `294cc1b`（未推送）。根仓库仍把嵌套项目目录视为未跟踪路径，这是既有仓库边界，不把嵌套仓库加入根提交。
+- 当前家用机硬件指纹由注册表只读识别为 MSI B760M / Intel Core i5-14600KF，与 `machines/家用机.md` 唯一匹配；CIM 查询因当前受控会话权限不足返回“拒绝访问”，不据此否定注册表指纹。
+- 当前家用 DSH web profile 的 `dsh-turn-cost` 依赖仍指向临时候选 `.tgz`；profile 用户层另有 `ratesPath` 覆盖。该状态证明现有手工部署不可跨机直接复制：临时绝对路径和用户名路径都会失效。
+
+### 轻调研与已确认事实
+
+1. **DSH 官方安装面**
+   - DSH 官方文档规定通过 `dsh plugin --profile web add <tarball>` 管理 profile；该命令同时让 pnpm 安装依赖并维护 `dsh.profile.bundles`。profile manifest 不应由安装器手写。预构建 `.tgz` 无需授予 git `prepare` 脚本执行权。
+   - 参考：[DSH 插件打包与安装](https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/user/develop/basic/publish.md)、[DSH CLI 参考](https://github.com/deepseek-ai/deepseek-harness/blob/master/apps/cli/reference/README.md)。
+2. **DSH 凭据边界**
+   - 官方模型页将 API Key 写入 `$DSH_HOME/.credentials.yaml`，`settings.yaml` 只保留凭据引用；密钥为只写表单，模型变更下一次请求生效。安装器直接编辑凭据文件会绕开 DSH 的校验与写入语义，因此禁止。
+   - 参考：[DSH 模型配置](https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/user/guide/providers.zh.md)。
+3. **Kimi 官方入口**
+   - Windows 官方 npm 安装要求 Node `>=22.19.0`；当前 npm 包版本调研快照为 `@moonshot-ai/kimi-code@0.38.0`。`kimi login` 完成 OAuth；`kimi web --no-open` 默认只绑定 `127.0.0.1:58627`，token 存于 `~/.kimi-code/server.token`。
+   - `GET /api/v1/oauth/usage` 是官方计划用量接口；但 Kimi 明确把 Server API 标为 experimental，运行版本自己的 `/openapi.json` 才是最终权威。因此安装器和插件必须保留版本/形状探测与安静降级，不能声称接口永不变化。
+   - 参考：[Kimi Code 安装](https://www.kimi.com/code/docs/en/kimi-code-cli/guides/getting-started)、[本地服务](https://www.kimi.com/code/docs/en/kimi-code-cli/guides/server.html)、[Server API](https://www.kimi.com/code/docs/en/kimi-code-cli/reference/server-api.html)。
+4. **百炼官方入口**
+   - 官方 CLI 可由 npm 安装 `bailian-cli`；当前调研快照为 `1.17.0`。模型 Token Plan API Key 与控制台 OAuth 可共存；`bl usage token-plan --output json` 需要控制台登录，所以 DSH 模型 Key 不能替代 `bl auth login --console --console-site domestic`。
+   - 参考：[百炼 CLI 官方仓库](https://github.com/modelstudioai/cli)、[认证命令参考](https://github.com/modelstudioai/cli/blob/main/skills/bailian-cli/reference/auth.md)。
+5. **现成轮子结论**
+   - TL-008 已是目标插件；DSH、Kimi Code、百炼均已有官方安装/认证入口。新代码只负责编排、事务回滚和验证，不复制三方客户端、不实现第二套凭据库、不手写 DSH profile manifest。
+
+### 方案（待门二）
+
+#### 1. 部署包结构与构建
+
+- 新增 `installer/`：PowerShell 5.1 兼容的安装核心、启动器、卸载/回滚器、双击 `.cmd` 入口、中文说明、非敏感 `installer-manifest.json` 和测试夹具。
+- 新增 `scripts/build-windows-installer.ps1`：先运行项目测试与 `npm pack --ignore-scripts`，计算候选 `.tgz` SHA-256，再把脚本、payload 和清单组装为 `dist/dsh-turn-cost-setup-<version>-win-x64.zip`；构建目录不提交，发布 ZIP 是否提交/上传另等机主指令。
+- payload 只包含本项目 `.tgz` 与安装脚本，不包含任何 profile、API Key、OAuth token、账号、机器名或真实日志。清单记录插件版本、包哈希、安装器版本、支持的 provider id 与 CLI 固定版本。
+
+#### 2. 事务式安装
+
+- 入口先确认 Windows、Node `>=22.19.0`、当前用户可写 DSH home，并唯一解析 `$DSH_HOME`（未设置时为 `~/.dsh`）；仅接受 profile 名 `web`，路径必须在解析后的 DSH home 内。
+- 先检查 DSH 是否正在监听/占用目标 profile；运行中则停止并提示用户自行关闭，不自动杀进程。
+- 在 `$DSH_HOME/backups/dsh-turn-cost-installer/<UTC 时间>-<随机后缀>/` 备份 profile manifest、lockfile、workspace 文件、用户 patch 和既有 `dsh-turn-cost` 包快照；备份清单逐项记录 SHA-256，不读取或复制 `.credentials.yaml`。
+- 校验 payload SHA-256 后，只调用官方 `dsh plugin --profile web add <绝对 tgz 路径>`。优先使用 PATH 中真实 `dsh`；否则先以机器现有的 `npx @deepseek-ai/dsh --version` 入口只读解析实际版本，再把同一精确版本用于本次安装、dump 与后续启动记录，避免一次流程内漂移。无法证明入口和版本可用时在任何 profile 写入前失败关闭。
+- 安装后执行 `--dump-config`，断言 bundle 层包含 `dsh-turn-cost` 且只有一个 `turn-cost` id；再核对 profile dependency/bundles。任一检查失败，按备份恢复并给出固定错误码。
+- 重复运行必须幂等：同版本同哈希只做健康检查；旧版本升级先备份；安装器不删除、不重排其他 bundle，不覆盖用户 patch。
+
+#### 3. 正确额度配置内建
+
+- 插件代码内置标准额度路由：`kimi-coding → kimi-usages`、`qwen-token-plan-cn → aliyun-bl`，不再要求每台机器复制 `rates.example.json` 或写用户名绝对路径才显示额度。
+- 自定义 `ratesPath` 继续只作为覆盖层：用户自定义价格、别名和合法额度路由仍胜出；现有配置保持兼容。新增明确禁用语义，允许用户按 route 关闭自动额度读取，避免“内置默认值”变成不可退出的外部调用。
+- Kimi 仍只访问 loopback；Qwen 仍只执行严格白名单中的裸命令名与固定参数。默认路由失败只显示“暂读不到”，不得拖垮 DSH、模型调用或另一条额度路由。
+
+#### 4. 隔离 CLI 工具链与人工授权
+
+- 不修改全局 npm prefix。把 `@moonshot-ai/kimi-code@0.38.0` 与 `bailian-cli@1.17.0` 作为安装器私有工具链安装到 `$DSH_HOME/turn-cost-tools/`，由专用 `package.json`/lockfile 固定直接与传递依赖；启动器仅在自身进程 PATH 前置该目录，不污染系统或其他终端。
+- 已有外部 CLI 只用于只读诊断，不被覆盖。私有工具链缺失且离线时，插件安装仍可完成，但明确输出 `CLI_PENDING`，并提供联网后的“补齐 CLI”入口；不得把额度不可用误报成安装成功。
+- 安装器只启动官方交互命令：`kimi login` 与 `bl auth login --console --console-site domestic`；不捕获其 stdout、不传 API Key 参数、不解析认证配置。用户可跳过，状态记为待办。
+- DSH 模型 Key 由用户随后在 Web UI 添加内置 `kimi-coding`、`qwen-token-plan-cn` provider 时手动输入。安装器仅检查 `settings.yaml` 是否存在对应 provider id，不读取凭据值；缺失时打开/提示模型设置步骤。
+
+#### 5. 日常启动与进程所有权
+
+- 生成 `$DSH_HOME/turn-cost-launcher/启动 DSH（含额度）.cmd`。启动器先复用已在 `127.0.0.1:58627` 且通过 Kimi `healthz/meta` 验证的服务；否则用私有 CLI 启动 `kimi web --no-open --port 58627`。
+- 端口被非 Kimi 服务占用时失败关闭，不跟随 Kimi 的自动递增端口，否则插件固定 loopback 地址会读错实例。
+- 启动器再以前述已验证 DSH 入口启动 web profile。若 Kimi 服务由本次启动器创建，则 DSH 退出后通过带本地 bearer 的官方 `POST /api/v1/shutdown` 干净停止；复用的既有 Kimi 实例不关闭。token 只在内存中使用，不落启动日志。
+- 不创建开机任务、不常驻后台、不修改防火墙；关闭 DSH 后不遗留本启动器拥有的 Kimi 进程。
+
+#### 6. 卸载与回滚
+
+- `回滚上一次安装.cmd` 恢复最近一次备份；`卸载.cmd` 只移除安装器拥有的当前插件/启动器/私有 CLI。若安装前已有 `dsh-turn-cost`，卸载恢复原版本而不是删除。
+- 不删除 DSH sessions、settings、`.credentials.yaml`、Kimi OAuth、百炼 OAuth 或其他全局 CLI；私有工具目录只有在状态文件证明归本安装器所有时才移除。
+- 删除前校验目标均位于 DSH home 下，并逐项列明；找不到可信状态文件时拒绝猜测删除。
+
+### 验收标准
+
+1. **静态与单测**：现有 46 项全部通过；新增默认额度路由、覆盖/禁用语义、脱敏错误码和 manifest/package 合同测试。
+2. **Windows 沙箱测试**：Windows CI 使用临时 `DSH_HOME`、伪 DSH/Kimi/bl shim 验证全新安装、同版本重跑、升级、payload 篡改、命令失败回滚、保留无关 bundle、凭据/settings 字节不变、卸载所有权和路径逃逸拒绝。
+3. **构建可重现性**：固定 Node/npm 与 CLI lockfile；同一提交两次构建的 payload 文件清单与每文件 SHA-256 一致。ZIP 容器时间戳差异若无法消除，不能宣称整包哈希可重现，只比较内容清单。
+4. **家用机真实验证**：在备份后执行安装 → API Key 人工步骤检查 → Kimi/Qwen OAuth → 快捷启动 → DSH 插件树/3080 → DeepSeek/Kimi/Qwen 三路显示 → 退出后 3080/58627 无本启动器残留 → 回滚旧版 → 再安装候选。
+5. **跨机边界**：单位机与笔记本分别运行同一 ZIP，仅记录硬件指纹、包哈希、版本、固定状态码与三路结果；不复制家用机凭据。两机未实测前只能标“待验证”，但安装器门三至少要求家用机完整事务与回滚通过。
+6. **仓库门禁**：`git diff --check`、PowerShell 语法/静态检查、`node --test`、Windows CI 夹具、`npm pack --dry-run`、根 `python tools/checks.py --json` 0 FAIL 后进入独立模型 K3；K3 修到通过再停门三。
+
+### 预计文件范围
+
+- 生产与配置：`lib/fold.js`、`lib/index.js`、`rates.example.json`、`package.json`、`package-lock.json`。
+- 安装器：`installer/**`、`scripts/build-windows-installer.ps1`。
+- 测试与 CI：`test/**`、`.github/workflows/test.yml`。
+- 文档与登记：`README.md`、`docs/DEVELOPMENT.md`、`CHANGELOG.md`、本方案文档；门三前同步根 `tools.md` 并重建图谱。
+
+### 风险与回滚摘要
+
+- **最高风险**：误写 profile/凭据、安装中断留下半状态、启动器误杀既有服务、Kimi experimental API 漂移、CLI 更新破坏输出契约。
+- **控制**：官方 DSH 命令、写前备份、payload 哈希、临时 home 夹具、固定 CLI lockfile、进程所有权、loopback/固定端口、固定错误码、禁止读取凭据。
+- **代码回滚**：回退本维护提交恢复基线 `93bef42`；不迁移会话或日志格式。
+- **机器回滚**：使用安装前备份恢复 profile 与原插件；不回滚也不删除由用户自行完成的 API/OAuth 凭据。
+
+### 门禁
+
+本方案触发门二且已获机主拍板；当前进入实施。未完成机器验、K3 与门三前，不宣称 ZIP 已交付；未获“推送”指令不推送，未发布 npm。
+
+### 实施结果（门三前）
+
+- **代码与包**：版本升至 `0.4.0`；内置 Kimi/Qwen 标准额度路由及覆盖/`enabled:false` 禁用语义。新增 Windows 安装、启动、补齐 CLI、回滚、卸载入口，固定 DSH `0.1.1-rc.2`、Kimi Code `0.38.0`、百炼 CLI `1.17.0` 与两套 lockfile。
+- **方案偏差（已收敛）**：门二方案中的 `npx` 版本探测在本机出现持续高 CPU 挂起，且受父项目 `packageManager: npm` 干扰；profile 哈希未改变。实施改为清单固定 DSH 版本，并在 `$DSH_HOME/turn-cost-dsh-cli` 用 bundled pnpm 与 frozen lock 建立隔离入口。pnpm 11.22.0 已忽略旧 `onlyBuiltDependencies`，按官方现行语义改用 `allowBuilds` 精确批准五个必要构建依赖。
+- **真实安装修正**：首轮机器验发现 profile 曾指向临时解压 tgz、`npm ci` 输出混入 `toolsReady`、回滚后仅凭 bundle 名可误判幂等；均补回归并修复。最终实现先原子固化完整包到 `$DSH_HOME/turn-cost-installer-package`，profile 只引用永久载荷，状态字段保持布尔，幂等同时校验状态哈希、bundle 与永久依赖路径。
+- **进程修正**：Kimi 0.38.0 的 live `/openapi.json` 证明 shutdown 为官方端点；实测无 JSON content type/body 时返回 `50001 Unsupported Media Type`。启动器已改为 bearer + `application/json` + `{}`，最终启动/退出测试后 3080、58627 均释放。机主关闭 Kimi 桌面客户端不是该错误根因：测试前 58627 未监听，进程树明确指向安装器私有 CLI。
+- **自动验证**：`npm ci --ignore-scripts --no-audit --no-fund` 成功；Node 全量测试 **52/52**；Windows PowerShell 5.1 夹具通过，覆盖旧版升级、永久载荷、同哈希幂等、篡改拒绝、失败回滚、凭据/settings 不变、卸载所有权；PowerShell 语法与 UTF-8 BOM 门禁通过。
+- **家用机真实验证**：安装、同哈希重跑（回滚点不变）、回滚到原 profile 精确哈希、再安装均成功；`settings.yaml` 与 `.credentials.yaml` 全程 SHA-256 不变。DSH/Kimi/百炼版本分别为 `0.1.1-rc.2`/`0.38.0`/`1.17.0`。DSH 首页 HTTP 200；Kimi meta/usage code 0；百炼返回真实 7 天额度；浏览器中每轮 Kimi 5h 徽章与汇总面板的 Kimi 7d/5h/加油包、Qwen 7 天额度同时显示，控制台 0 error/warn。
+- **最终构建候选**：`dist/dsh-turn-cost-setup-0.4.0-win-x64.zip`，15 个清单文件逐项验签；ZIP SHA-256 `ECC4A505922F727E86C83F2421D691E43EF1A0C67328CAD801DBCBD5E9A30EF2`，插件 tgz SHA-256 `56AB62224B05C0D8C81BFBD1AB0BA09EF7DF33D710B9E7BB1AE6F72F88354A73`。ZIP 容器哈希不宣称跨构建可重现，内容清单才是逐文件验收依据。
+- **根门禁**：`python tools/checks.py --json` 为 0 FAIL（C1–C5/C8 PASS，C6 INFO，C7 仅因本轮未提交改动与本地 ahead 产生 WARN）；图谱重建为 134 项。项目侧 `git diff --check`、四个 JS 语法、PowerShell 5.1 语法、`npm pack --dry-run` 均通过。
+- **K3 状态**：2026-08-25 已启动第一层只读审计，但模型服务多轮超时，尚未形成 verdict；机主随后明确指令“k3复检取消”。因此本轮不把 K3 记为通过，按机主取消决定结束该门禁。
+- **门三状态**：家用机实现与验证完成，现停门三等待机主确认。单位机、笔记本仍是同一 ZIP 的后续跨机验收，不冒充本机已验证。当前未提交、未推送、未发布 npm；门三确认不等于推送授权。
