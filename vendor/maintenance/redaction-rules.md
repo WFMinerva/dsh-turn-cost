@@ -16,6 +16,7 @@
 
 - **允许**（本地且 gitignored 的原始报告）：机器档位（home/unit/laptop/unknown）、硬件型号串、软件版本、端口占用布尔、哈希、固定错误码。
 - **禁止**（任何报告与日志）：密钥/令牌原文、用户名、凭据内容（含 `.credentials.yaml`、Kimi token、bl 认证配置的任何片段）、个人绝对路径。
+- **唯一例外（loopback bearer，继承 0.4.0 门三语义）**：Kimi 本地服务 token（`~/.kimi-code/server.token`）允许读入内存并立即用于 `127.0.0.1:58627` 的 bearer 请求；不打印、不进报告/日志/仓库、不复制到其他位置。报告组装层只接受白名单字段，自由文本无入口。
 - **机器指纹字段白名单**：仅注册表 `SystemManufacturer`/`SystemProductName`/`BaseBoardManufacturer`/`BaseBoardProduct`/`ProcessorNameString`（与 checks.py `_hardware_fingerprint` 同源）。**显式排除**：序列号（Win32_BIOS SerialNumber 等）、UUID、MAC、机器名（Win32_ComputerSystem.Name）、用户名、SID——这些字段不得被读取。
 - **artifact 路径**：只准仓库相对路径（正斜杠），组装期断言拒绝绝对路径与 `..`。
 

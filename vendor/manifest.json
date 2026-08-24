@@ -1,12 +1,12 @@
 ﻿{
     "schemaVersion":  1,
     "sourceRepo":  "WFMinerva/tool-library",
-    "commit":  "246785c697ead77e8bc18c6db37a62c01c84d33c",
-    "generatedAt":  "2026-08-24T18:01:04.0800207Z",
+    "commit":  "0fbd88ce11d419894a406c8acec855eabd0aa32d",
+    "generatedAt":  "2026-08-24T18:23:30.7815367Z",
     "files":  [
                   {
                       "path":  "core.ps1",
-                      "sha256":  "7E33D832928AFE1D257D9ED7C9E679E530FF4F7D40027DA21624421B75AF0313"
+                      "sha256":  "F9B33E39ACC582C93FC3109E9F03540FACF10CAA89ED40B0C9237E2D48275E61"
                   },
                   {
                       "path":  "vendor.ps1",
@@ -26,7 +26,7 @@
                   },
                   {
                       "path":  "report.ps1",
-                      "sha256":  "034DD3FCB059AD5924A1B10FC10D583E3F481C75435693B76CF79DD1CD348E5D"
+                      "sha256":  "B3920BD2B9319655F1294426D54334C6AF45F7C50967262A15C97FBC999CEAA6"
                   },
                   {
                       "path":  "report.schema.json",
@@ -34,7 +34,7 @@
                   },
                   {
                       "path":  "redaction-rules.md",
-                      "sha256":  "BDF8D1254020425FBFC28C7EEC67B47E1B7E87F4A6394504C10964FAD90A57C1"
+                      "sha256":  "79314AC6E6001B687434F3454190A3899BB2DCE135E0AE9D170A9487467ED195"
                   },
                   {
                       "path":  "adapter.schema.json",

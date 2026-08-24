@@ -1,7 +1,6 @@
 ﻿[CmdletBinding()]
 param(
   [Parameter(Position = 0)]
-  [ValidateSet('verify', 'build', 'acceptance', 'doctor', 'selftest', 'publish-vendor', 'sync-versions', 'help')]
   [string]$Command = 'help',
   [string]$Target = '',
   [switch]$Json,
@@ -17,6 +16,11 @@ param(
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version 2.0
+$script:ValidCommands = @('verify', 'build', 'acceptance', 'doctor', 'selftest', 'publish-vendor', 'sync-versions', 'help')
+if ($script:ValidCommands -notcontains $Command) {
+  Write-Host ("USAGE_ERROR: 未知子命令 '" + $Command + "'；可用：" + ($script:ValidCommands -join ', '))
+  exit 2
+}
 
 $script:Here = $PSScriptRoot
 . (Join-Path $Here 'redaction.ps1')
@@ -193,11 +197,12 @@ function Invoke-AcceptanceCommand {
         $summary = if ($null -ne $r -and $r.summary) { [string]$r.summary } else { '通过' }
         $code = if ($null -ne $r -and $r.code) { [string]$r.code } else { $null }
         Add-ReportCheck $report $stage.id $status $summary $code
-        if ($status -eq 'FAIL') { $chainFailed = $true }
+        if ($status -eq 'FAIL') { $chainFailed = $true; $script:AcceptanceFailed = $true }
         if ($status -eq 'SKIP') { Add-ReportSkip $report $stage.id $summary }
       } catch {
         Add-ReportCheck $report $stage.id 'FAIL' ("$($_.Exception.Message)") 'STAGE_EXCEPTION'
         $chainFailed = $true
+        $script:AcceptanceFailed = $true
       }
     }
   } finally {

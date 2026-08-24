@@ -1,5 +1,4 @@
 {
-  "_note": "示例报告（虚构数据）：展示 acceptance-report.json 的 schema 与脱敏口径。真实原始报告不入库（.gitignore）；发布证据需经脱敏校验后显式复制为 evidence/<日期>-<版本>.json。",
   "schema_version": 1,
   "command": "acceptance",
   "adapter": { "name": "dsh-turn-cost", "version": "0.4.0" },

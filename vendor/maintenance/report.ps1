@@ -4,7 +4,18 @@
 
 $script:ReportStatusValues = @('PASS', 'WARN', 'FAIL', 'SKIP')
 
+function Get-JsonPropertySafe($Obj, [string]$Name) {
+  if ($null -eq $Obj) { return $null }
+  foreach ($p in $Obj.PSObject.Properties) { if ($p.Name -ceq $Name) { return $p.Value } }
+  return $null
+}
+
 function New-MaintenanceReport([string]$CommandName, $AdapterInfo, [string]$CoreCommit) {
+  if ($null -ne $AdapterInfo) {
+    $hasName = $null -ne (Get-JsonPropertySafe $AdapterInfo 'name')
+    $hasVersion = $null -ne (Get-JsonPropertySafe $AdapterInfo 'version')
+    if (-not ($hasName -and $hasVersion)) { throw 'REPORT_ADAPTER_SHAPE_INVALID: adapter 只允许 {name, version} 白名单形状' }
+  }
   return [pscustomobject]@{
     schema_version = 1
     command = $CommandName
@@ -21,18 +32,25 @@ function New-MaintenanceReport([string]$CommandName, $AdapterInfo, [string]$Core
   }
 }
 
+function Format-ReportText([string]$Text) {
+  if ($null -eq $Text) { return '' }
+  $s = $Text -replace "[\r\n]+", ' '
+  if ($s.Length -gt 200) { $s = $s.Substring(0, 200) + '…' }
+  return $s
+}
+
 function Add-ReportCheck($Report, [string]$Id, [string]$Status, [string]$Summary, [string]$Code) {
   if ($script:ReportStatusValues -notcontains $Status) { throw "REPORT_STATUS_INVALID: $Status" }
-  $detail = $Summary
-  if ($detail.Length -gt 200) { $detail = $detail.Substring(0, 200) + '…' }
+  $summary = Format-ReportText $Summary
   [void]$Report.checks.Add([pscustomobject]@{
-    id = $Id; status = $Status; code = $Code; summary = $Summary; detail = $detail
+    id = $Id; status = $Status; code = $Code; summary = $summary; detail = $summary
   })
 }
 
 function Add-ReportSkip($Report, [string]$Id, [string]$Reason) {
-  [void]$Report.skipped.Add([pscustomobject]@{ id = $Id; reason = $Reason })
-  Add-ReportCheck $Report $Id 'SKIP' $Reason 'SKIPPED'
+  $reason = Format-ReportText $Reason
+  [void]$Report.skipped.Add([pscustomobject]@{ id = $Id; reason = $reason })
+  Add-ReportCheck $Report $Id 'SKIP' $reason 'SKIPPED'
 }
 
 function Add-ReportArtifact($Report, [string]$RepoRoot, [string]$AbsPath) {

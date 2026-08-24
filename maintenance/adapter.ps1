@@ -292,8 +292,18 @@ function Get-AcceptanceStages {
 
 function Invoke-AdapterCleanup {
   $problems = New-Object System.Collections.ArrayList
+  # 链失败时先按前置快照恢复验收前 profile（用安装器自带备份）；成功链末尾已按设计重新安装
+  try {
+    $failed = $false
+    try { $failed = [bool]$script:AcceptanceFailed } catch { }
+    if ($failed -and $null -ne $script:Acc.extract -and (Test-Path -LiteralPath (Join-Path $script:Acc.extract 'Install.ps1') -PathType Leaf) -and (Test-PortOpen 3080) -eq $false) {
+      $code = Invoke-AcceptancePs1 'Rollback' $script:Acc.extract
+      if ($code -ne 0) { [void]$problems.Add('失败后回滚退出非零（请人工核对备份目录）') }
+    }
+  } catch { [void]$problems.Add('失败后回滚异常') }
   try {
     if ($null -ne $script:Acc.dshProcess -and -not $script:Acc.dshProcess.HasExited) {
+      # DSH 无对外的优雅停止接口；该进程由本验收链启动（所有权明确），直接结束并核对端口释放
       Stop-Process -Id $script:Acc.dshProcess.Id -Force -ErrorAction SilentlyContinue
       Start-Sleep -Seconds 1
       if (Test-PortOpen 3080) { [void]$problems.Add('DSH 进程已停但 3080 仍监听') }

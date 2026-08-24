@@ -4,24 +4,24 @@ import { readFile } from "node:fs/promises";
 
 const json = async (path) => JSON.parse(await readFile(new URL(path, import.meta.url), "utf8"));
 
-test("installer private CLI manifest and lock pin the approved official packages", async () => {
+test("installer private CLI manifest and lock follow versions.json (single source, no hardcoded duplicates)", async () => {
+  const versions = await json("../versions.json");
   const manifest = await json("../installer/tools-package.json");
   const lock = await json("../installer/tools-package-lock.json");
-  assert.deepEqual(manifest.dependencies, {
-    "@moonshot-ai/kimi-code": "0.38.0",
-    "bailian-cli": "1.17.0",
-  });
-  assert.deepEqual(lock.packages[""].dependencies, manifest.dependencies);
-  assert.equal(lock.packages["node_modules/@moonshot-ai/kimi-code"].version, "0.38.0");
-  assert.equal(lock.packages["node_modules/bailian-cli"].version, "1.17.0");
+  assert.deepEqual(manifest.dependencies, versions.tools);
+  assert.deepEqual(lock.packages[""].dependencies, versions.tools);
+  for (const [name, ver] of Object.entries(versions.tools)) {
+    assert.equal(lock.packages["node_modules/" + name].version, ver);
+  }
 });
 
-test("installer pins the DSH launcher and its full pnpm graph", async () => {
+test("installer pins the DSH launcher per versions.json and keeps the pnpm build allowlist", async () => {
+  const versions = await json("../versions.json");
   const dsh = await json("../installer/dsh-package.json");
   const lock = await readFile(new URL("../installer/dsh-package-lock.yaml", import.meta.url), "utf8");
   const workspace = await readFile(new URL("../installer/dsh-pnpm-workspace.yaml", import.meta.url), "utf8");
-  assert.equal(dsh.dependencies["@deepseek-ai/dsh"], "0.1.1-rc.2");
-  assert.match(lock, /specifier: 0\.1\.1-rc\.2/);
+  assert.equal(dsh.dependencies[versions.dsh.package], versions.dsh.version);
+  assert.match(lock, new RegExp("specifier: " + versions.dsh.version.replace(/\./g, "\\.")));
   for (const name of ["@deepseek-ai/dsh-subprocess-local", "@google/genai", "koffi", "node-pty", "protobufjs"]) {
     assert.match(workspace, new RegExp(name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   }
@@ -75,4 +75,20 @@ test("port check injection point is fixture-only and single-referenced", async (
   const fixture = await readFile(new URL("./windows-installer.test.ps1", import.meta.url), "utf8");
   assert.match(fixture, /Remove-Item Env:DTC_PORT_CHECK_OVERRIDE/);
   assert.match(fixture, /\$env:DTC_PORT_CHECK_OVERRIDE = /);
+});
+
+test("adapter layer does not redefine generic-layer reserved functions (no core logic copy)", async () => {
+  const adapter = await readFile(new URL("../maintenance/adapter.ps1", import.meta.url), "utf8");
+  const reserved = [
+    "Get-FileSha256", "Get-RelativeFiles", "New-DirManifest", "Test-DirManifest",
+    "New-DeterministicZip", "Assert-ChildPath", "Invoke-Redact", "Get-RedactionFragments",
+    "Test-RedactionMatchesPython", "Test-PortOpen", "Get-ToolFact", "Get-MachineFingerprint",
+    "Get-MachineBlock", "Get-EnvironmentFacts", "Resolve-DshHome", "New-MaintenanceReport",
+    "Add-ReportCheck", "Add-ReportSkip", "Add-ReportArtifact", "Set-ReportCleanup",
+    "Write-Report", "ConvertTo-RedactedObject", "Publish-VendorCore",
+  ];
+  for (const name of reserved) {
+    assert.doesNotMatch(adapter, new RegExp("function\\s+" + name + "\\b"),
+      "adapter redefines generic function " + name);
+  }
 });
