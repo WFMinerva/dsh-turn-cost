@@ -108,8 +108,22 @@ node --test              # 纯函数单测，秒级（默认 glob 自动匹配 t
 3. **为什么金额是「估计值」而不是账单？** 计价原料是 provider 上报的 usage token 数；官方账单另有口径（活动折扣、账单级缓存策略等），本地日志无法复现。README 明示「不构成账单」。
 4. **为什么 cacheWriteTokens 统计了却不计费？** 官方 CNY 价表只有「输入 / 缓存读 / 输出」三档单价，缓存写没有官方价；计入就等于编造价格，违反「不编造」原则。保留统计，等官方出价即可补上。
 5. **为什么缓存命中率 = cacheRead ÷ (input + cacheRead)？** 衡量输入侧的缓存节省效果；分母不含 output（输出与缓存无关）。与 dsh 自带 token 计量的口径一致。
-6. **为什么没有设置界面（`static Config = z.object({})`）？** 价格是官方口径，无可配置项。用户想覆盖 bundle 行，可在自己 profile 的 cordis.patch.yml 里用同 id `turn-cost`（用户层后应用、同 id 行胜出）。
+6. **为什么 0.2.0 之前没有设置界面？** 当时价格是官方口径，无可配置项，`static Config = z.object({})`。0.2.0 起 Config 接受 `ratesPath`（自定义费率表路径，见决策 11）；仍不做 GUI 设置页——费率表是低频改动的文本文件，用户层 `cordis.patch.yml` 同 id 覆盖即可（用户层后应用、同 id 行胜出）。
 7. **为什么单测只测 fold.js？** 计费口径是正确性核心，fold.js 被刻意设计成零依赖纯函数，`node --test` 直接跑、无网络无安装；host/client 靠 UI 人工验证（见 §四）。
 8. **为什么徽章失败渲染为空、不弹错？** 信息性组件，**永不阻塞 UI**（读日志失败、轮号反查失败都静默）。
 9. **为什么客户端缓存 RPC promise 但失败不缓存？** 徽章重挂载频繁，成功结果按 (session,turn) 缓存（上限 200 条）；失败/未就绪不缓存，下次挂载自动重试，避免徽章被钉死成不可见。
 10. **为什么历史 commit 的 author 是旧中文名却不改？** 公开仓库、已被社区 list 收录，改写历史会破坏 fork 与引用；新 commit 用新署名，新旧共存属正常现象。
+11. **为什么费率表是"叠加"而不是"替换"？**（0.2.0）自定义 rates.json 经 `mergeRates(builtinRates(), custom)` 按模型名逐项覆盖内置官方卡：用户只写自己关心的模型，DeepSeek 官方价永远兜底；文件缺失/损坏回退内置卡并记 warn，插件不死。
+12. **为什么订阅制模型在费率表里配 0 价而不是缺席？** 缺席 = `unpriced`（语义：未知价，绝不编造）；配 0 = 价格已知为 0（订阅口径）且计入 `priced`。两者在汇总里分开统计，避免"有价的 0"和"没价"混为一谈。
+13. **为什么跨对话汇总走 host 端枚举日志，而不是 client 端 `useSessions` 投影？** 会话摘要行的 `projectionValues.tokenUsage` 只有四桶聚合值，**无时间戳、无模型名**；"按天/按模型"分组必须有 (time, model, buckets) 粒度的样本，只有扫日志拿得到。纯 client 路径被调研后否决（调研记录见 tool-library `docs/方案-DSH对话额度表.md`）。
+14. **为什么汇总按会话粒度签名缓存，而不是整表一个签名？** 150+ 会话全量解压只有首次贵；`summaryCache` 以 `sessionId → size:mtime|live事件数` 为签名，重复打开汇总面板只重算变化过的会话。
+15. **为什么会话级读数条挂 `conversation.composer.dock`？** 官方注释明确该 list 槽位就是统计条所在的环境读数带（"the shipped stats line lives here"），并列共存不替换；`conversation.chat.turnTail` 照旧禁用。
+16. **为什么读数条的 token 口径可以直接对比官方统计条？** 官方 `tokenUsage` 投影的 `uncachedInputTokens` 就是 provider 上报的 `usage.inputTokens`（dsh-client-connection `tokenUsageOf` 实现），与 fold.js 的 `inputTokens` 桶同源；0.2.0 实测 5 个真实会话逐桶 MATCH。
+
+## 七、0.2.0 新增件的维护要点
+
+- **新增 `@Remote` 端点**：照抄 `lib/index.js` static 块里 `sessionTotals`/`summary` 的 `__esDecorate` 调用（先声明 `_xxx_decorators` 变量再装饰），参数名 `request` 是 wire 协议的一部分。
+- **费率表 schema**（`rates.json`，version 1）：`{ currency, models: { <model>: 平价{input,cacheRead,cacheWrite?,output} | 峰谷{peak,offPeak} }, aliases }`；schema 演进时 bump `RATES_VERSION`（fold.js）并写迁移说明。
+- **`listSessions` 的目录约定**：`<dsh-home>/sessions/<workspace>/<sessionId>/session.jsonl.zstd`；目录不可读/文件缺失一律跳过，枚举永不抛。
+- **单测里的临时目录**：Windows 上首次 `mkdtemp`+写删可能触发杀软扫描（首跑 ~36s，之后 <100ms），属环境噪声不是回归。
+- **host 端改动需重启 dsh web 生效**（web profile 禁用 host 插件 HMR）；client bundle（client.js）覆盖到 profile 后由常驻 HMR 热更新（rev 变化触发，React 状态不保留）。

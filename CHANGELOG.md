@@ -4,6 +4,20 @@
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-08-24
+
+### Added
+
+- **自定义费率表**：插件配置 `ratesPath` 指向本机 JSON（模型→四桶单价，可选峰谷双档、别名归一化、订阅制 0 价登记），叠加在内置官方 CNY 卡之上；文件缺失/损坏自动回退内置价
+- **会话级读数条**：`conversation.composer.dock` 槽位（官方统计条同带）显示本会话累计金额/token/缓存命中率，token 口径与官方统计条逐桶一致
+- **跨对话汇总面板**：会话页头「额度汇总」按钮打开面板，展示全部会话合计、按模型分组、按天分组（近 14 天），数据来自 host 端新端点 `turnCost/summary`（枚举全部会话日志，签名缓存增量重算）
+- host 端新端点 `turnCost/sessionTotals`（整会话聚合）；fold.js 新增 `listSessions` / `readSessionEntry` / `sessionTitleOf` / `costOfSession` / `beijingDay` / `builtinRates` / `mergeRates` / `resolveRateEntry`
+- `rates.example.json` 费率表示例
+
+### Changed
+
+- `costOfStep` / `costOfTurn` 接受可选费率表参数；不传时行为与内置官方 CNY 卡逐字节一致（既有 11 项测试原样通过）
+
 ## [0.1.3] - 2026-08-24
 
 ### Fixed

@@ -8,10 +8,22 @@ import {
   ZSTD_MAGIC,
   WEEKEND_OFF_PEAK_EFFECTIVE_MS,
   isPeak,
+  beijingDay,
   foldEvents,
   costOfStep,
   costOfTurn,
+  costOfSession,
+  builtinRates,
+  mergeRates,
+  resolveRateEntry,
+  sessionTitleOf,
+  listSessions,
+  isValidSessionId,
+  findSessionFile,
 } from "../lib/fold.js";
+import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 const atBeijing = (year, month, day, hour, minute = 0) =>
   Date.UTC(year, month - 1, day, hour - 8, minute);
@@ -116,4 +128,143 @@ test("costOfTurn: sums buckets, separates priced from unpriced steps", () => {
 test("costOfTurn: no samples for the turn → null", () => {
   assert.equal(costOfTurn([], 3), null);
   assert.equal(costOfTurn([{ turn: 1, step: 1, model: "deepseek-v4-pro", time: T_PEAK, inputTokens: 1 }], 3), null);
+});
+
+// ── K3 round-1 regression (变更 #3 复检) ─────────────────────────────────
+
+test("resolveRateEntry: prototype names never resolve (own-key guarded)", () => {
+  const rates = mergeRates(builtinRates(), CUSTOM_RATES);
+  assert.equal(resolveRateEntry(rates, "__proto__"), undefined);
+  assert.equal(resolveRateEntry(rates, "constructor"), undefined);
+  assert.equal(resolveRateEntry(rates, "toString"), undefined);
+  assert.equal(costOfStep({ model: "__proto__", turn: 1, step: 1, inputTokens: 1e6 }, rates), null);
+});
+
+test("findSessionFile: rejects traversal session ids and stays inside the root", async () => {
+  assert.equal(isValidSessionId("session-0283766c-a4c7"), true);
+  assert.equal(isValidSessionId("../escape"), false);
+  assert.equal(isValidSessionId("a/b"), false);
+  assert.equal(isValidSessionId(""), false);
+  assert.equal(isValidSessionId(undefined), false);
+  const root = await mkdtemp(join(tmpdir(), "dsh-turn-cost-"));
+  try {
+    await mkdir(join(root, "ws", "s-1"), { recursive: true });
+    await writeFile(join(root, "ws", "s-1", "session.jsonl.zstd"), "x");
+    assert.ok((await findSessionFile(root, "s-1")) !== undefined);
+    assert.equal(await findSessionFile(root, "../../etc/passwd"), undefined);
+    assert.equal(await findSessionFile(root, ".."), undefined);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+// ── rate-table injection (变更 #3) ────────────────────────────────────────
+
+const CUSTOM_RATES = {
+  version: 1,
+  currency: "CNY",
+  models: {
+    "k3-256k": { input: 0, cacheRead: 0, output: 0, note: "订阅制，仅展示 token" },
+    "qwen3.7-max": { input: 2.0, cacheRead: 0.4, cacheWrite: 2.0, output: 6.0 },
+  },
+  aliases: { "k3": "k3-256k" },
+};
+
+test("costOfStep: custom flat rate prices all four buckets and needs no time", () => {
+  const rates = mergeRates(builtinRates(), CUSTOM_RATES);
+  const sample = { model: "qwen3.7-max", turn: 1, step: 1, inputTokens: 1e6, cacheReadTokens: 1e6, cacheWriteTokens: 1e6, outputTokens: 1e6 };
+  // 2.0 + 0.4 + 2.0 + 6.0 = 10.4 — cacheWrite included, no time on the sample
+  assert.ok(Math.abs(costOfStep(sample, rates) - 10.4) < 1e-9);
+});
+
+test("costOfStep: alias resolves to the canonical model's rate", () => {
+  const rates = mergeRates(builtinRates(), CUSTOM_RATES);
+  const sample = { model: "k3", turn: 1, step: 1, inputTokens: 1e6, outputTokens: 1e6 };
+  assert.equal(costOfStep(sample, rates), 0); // known price: zero (subscription)
+  assert.equal(resolveRateEntry(rates, "k3")?.note, "订阅制，仅展示 token");
+});
+
+test("costOfStep: provider-scoped key wins over the bare model name (same model, different route)", () => {
+  const rates = mergeRates(builtinRates(), {
+    models: { "qwen-token-plan-cn/deepseek-v4-pro": { input: 0, cacheRead: 0, output: 0, note: "Token Plan 抵扣" } },
+  });
+  const base = { model: "deepseek-v4-pro", time: T_PEAK, turn: 1, step: 1, inputTokens: 1e6, cacheReadTokens: 0, outputTokens: 0, cacheWriteTokens: 0 };
+  // official route keeps the official peak price…
+  assert.ok(Math.abs(costOfStep({ ...base, provider: "deepseek-official" }, rates) - 9.0) < 1e-9);
+  // …while the same model through the Token Plan pool prices at subscription zero
+  assert.equal(costOfStep({ ...base, provider: "qwen-token-plan-cn" }, rates), 0);
+  // alias hop also resolves under the scoped key
+  const aliased = mergeRates(rates, { aliases: { "v4-pro": "deepseek-v4-pro" } });
+  assert.equal(costOfStep({ ...base, model: "v4-pro", provider: "qwen-token-plan-cn" }, aliased), 0);
+});
+
+test("costOfStep: custom table never fabricates — unknown model and tiered-without-time stay null", () => {
+  const rates = mergeRates(builtinRates(), CUSTOM_RATES);
+  assert.equal(costOfStep({ model: "mystery", turn: 1, step: 1, inputTokens: 1 }, rates), null);
+  assert.equal(costOfStep({ model: "deepseek-v4-pro", turn: 1, step: 1, inputTokens: 1e6 }, rates), null);
+});
+
+test("mergeRates: custom entries overlay built-ins per key; malformed override degrades to base", () => {
+  const base = builtinRates();
+  const override = mergeRates(base, { models: { "deepseek-v4-pro": { input: 1, output: 1 } } });
+  assert.equal(override.models["deepseek-v4-pro"].input, 1); // flat replaces tiered
+  assert.equal(override.models["deepseek-v4-flash"].peak.input, 3.0); // untouched
+  assert.equal(mergeRates(base, null), base);
+  assert.equal(mergeRates(base, "junk"), base);
+  assert.equal(mergeRates(base, { models: "junk" }).models["deepseek-v4-pro"].peak.input, 9.0);
+});
+
+test("costOfSession: aggregates every turn and reports models and time span", () => {
+  const rates = mergeRates(builtinRates(), CUSTOM_RATES);
+  const samples = [
+    { model: "deepseek-v4-pro", time: T_PEAK, turn: 1, step: 1, inputTokens: 1e6, cacheReadTokens: 0, outputTokens: 0, cacheWriteTokens: 0 },
+    { model: "k3-256k", time: T_OFF_PEAK, turn: 2, step: 1, inputTokens: 5e5, cacheReadTokens: 0, outputTokens: 1e5, cacheWriteTokens: 0 },
+    { model: "no-rate", time: T_OFF_PEAK, turn: 3, step: 1, inputTokens: 1, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 },
+  ];
+  const r = costOfSession(samples, rates);
+  assert.ok(Math.abs(r.cost - 9.0) < 1e-9); // pro peak input only; k3 flat zero; no-rate excluded
+  assert.equal(r.steps, 3);
+  assert.equal(r.priced, 2); // zero-priced counts as priced — the price is known
+  assert.equal(r.unpriced, 1);
+  assert.deepEqual(new Set(r.models), new Set(["deepseek-v4-pro", "k3-256k", "no-rate"]));
+  assert.equal(r.firstTime, Math.min(T_PEAK, T_OFF_PEAK));
+  assert.equal(r.lastTime, Math.max(T_PEAK, T_OFF_PEAK));
+  assert.equal(costOfSession([], rates), null);
+});
+
+test("beijingDay: Beijing-calendar day key, host-timezone independent", () => {
+  assert.equal(beijingDay(atBeijing(2026, 8, 24, 0, 30)), "2026-08-24");
+  assert.equal(beijingDay(atBeijing(2026, 8, 24, 23, 59)), "2026-08-24");
+  assert.equal(beijingDay(atBeijing(2026, 8, 25, 0, 0)), "2026-08-25");
+  assert.equal(beijingDay(undefined), null);
+});
+
+test("sessionTitleOf: last session/title wins; none → undefined", () => {
+  assert.equal(sessionTitleOf([
+    { type: "session/title", data: { title: "旧标题" } },
+    { type: "assistant/message", data: {} },
+    { type: "session/title", data: { title: "新标题" } },
+  ]), "新标题");
+  assert.equal(sessionTitleOf([{ type: "user/message", data: {} }]), undefined);
+});
+
+test("listSessions: enumerates <root>/<workspace>/<sessionId>/session.jsonl.zstd, degrades on junk", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dsh-turn-cost-"));
+  try {
+    await mkdir(join(root, "ws-a", "s-1"), { recursive: true });
+    await mkdir(join(root, "ws-a", "s-2"), { recursive: true });
+    await mkdir(join(root, "ws-b", "s-3"), { recursive: true });
+    await writeFile(join(root, "ws-a", "s-1", "session.jsonl.zstd"), "x");
+    await writeFile(join(root, "ws-a", "s-2", "other.txt"), "x"); // wrong name — skipped
+    await writeFile(join(root, "ws-b", "s-3", "session.jsonl.zstd"), "x");
+    await writeFile(join(root, "loose-file"), "x"); // not a directory — skipped
+    const found = await listSessions(root);
+    assert.deepEqual(
+      found.map((f) => `${f.workspace}/${f.sessionId}`).sort(),
+      ["ws-a/s-1", "ws-b/s-3"],
+    );
+    assert.deepEqual(await listSessions(join(root, "does-not-exist")), []);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });

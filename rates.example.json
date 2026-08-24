@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "currency": "CNY",
+  "models": {
+    "deepseek-v4-pro": {
+      "peak": { "input": 9.0, "cacheRead": 0.3, "output": 27.0 },
+      "offPeak": { "input": 4.5, "cacheRead": 0.15, "output": 13.5 }
+    },
+    "deepseek-v4-flash": {
+      "peak": { "input": 3.0, "cacheRead": 0.1, "output": 9.0 },
+      "offPeak": { "input": 1.5, "cacheRead": 0.05, "output": 4.5 }
+    },
+    "k3-256k": {
+      "input": 0,
+      "cacheRead": 0,
+      "output": 0,
+      "note": "Kimi Allegro 订阅：按周期窗口限流，无 token 单价，只展示 token"
+    },
+    "qwen3.7-max": {
+      "input": 0,
+      "cacheRead": 0,
+      "output": 0,
+      "note": "阿里云 Token Plan：按套餐额度抵扣，系数以官方页为准，核实后自行填价"
+    },
+    "qwen-token-plan-cn/deepseek-v4-pro": {
+      "input": 0,
+      "cacheRead": 0,
+      "output": 0,
+      "note": "provider/模型 写法：同一模型经 Token Plan 池走订阅抵扣；经官方路由仍按内置 CNY 价"
+    }
+  },
+  "aliases": {
+    "k3": "k3-256k"
+  }
+}

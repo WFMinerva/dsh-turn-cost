@@ -86,3 +86,62 @@
 - GitHub：`d7f3a28`(fix) + `5ee8de9`(docs 变更记录#2) + `cdd2c66`(docs 发布记录) 已推送 `origin/master`，远端 SHA `cdd2c66` 核验一致。
 - npm：`dsh-turn-cost@0.1.3` 已发布为公共包；registry 核验 `version=0.1.3`、`latest=0.1.3`（2026-08-24 03:20:27Z）。
 - 本机 profile 副本已同步至 0.1.3（`lib/fold.js` 含 `deepseek-v4-flash-vision-exp` 价目）；待重启 dsh web 生效。
+
+## 变更记录 #3（2026-08-24）
+
+### 状态
+
+门一已确认（tool-library 立项「DSH 对话额度表」，门一/门二均机主拍板 2026-08-24；判级 A→C，实施以本变更记录为准，立项档案见 tool-library `docs/方案-DSH对话额度表.md`）；实施完成；K3 双层复检通过（机器验 0 FAIL + codex 独立模型审第 2 轮「通过」）；GUI 实测待 dsh web 重启窗口；待门三。
+
+### 需求
+
+- 在 dsh Web GUI 内嵌显示**每个对话**的 token 账（四桶）+ 按自定义费率折算的估算金额，并提供**跨对话汇总**视图（按天/按模型）。
+- 费率表走自定义 JSON（数据与代码分离，所有模型可配单价）；订阅制模型（Kimi Allegro 窗口制、阿里云 Token Plan 限额制，机主拍板）出厂配 0 价只显 token，不编造。
+- 不改 DSH 本体代码；不做"剩余额度"查询（订阅 API 不提供）；敏感信息（密钥/账号/金额）不入库。
+
+### 基线
+
+- 基线提交：`0aa54e2`（`docs: 发布记录终态——npm 0.1.3 已发布`）。
+- 基线工作区：干净，与 origin/master 同步。
+- 基线验证：`node --test` 11 项通过、0 项失败（Node v24.18.0）。
+- 原行为：仅轮级金额徽章（assistant-actions），价表硬编码 `OFFICIAL_CNY`，`Config = z.object({})` 无配置。
+
+### 方案
+
+- `lib/fold.js`：费率表抽象（`builtinRates`/`mergeRates`/`resolveRateEntry`，平价与峰谷双档、别名一跳归一化、cacheWrite 可计价、**`provider/模型` 作用域键**——同一模型名经订阅池与官方按量路由分别定价，实施中发现的口径修正）；`costOfStep(sample, rates?)`/`costOfTurn(samples, turn, rates?)` 价表注入（**不传时与旧行为逐字节一致**）；新增 `costOfSession`、`beijingDay`、`listSessions`、`readSessionEntry`、`sessionTitleOf`；`readSessionSamples` 返回值增 `title` 字段（additive）。
+- `lib/index.js`：`Config` 接受 `ratesPath`；构造时 `loadRates` 叠加（文件缺失/损坏回退内置卡 + warn 降级）；新增端点 `turnCost/sessionTotals`（整会话聚合）、`turnCost/summary`（枚举全部会话 + 按北京时间天/按模型分组，`summaryCache` 按会话粒度签名缓存）；新端点装饰器照抄既有手工转译块模式。
+- `lib/client.js`：新增 `conversation.composer.dock` 会话级读数条（token 口径与官方统计条同源；金额 RPC 防抖 1.2s 跟随 tokenUsage 投影变化；读不到金额降级为只显 token）、`conversation.session.header.actions` 「额度汇总」按钮 + 浮层面板（合计/按模型/按近 14 天三张表；每次打开重取，host 侧签名缓存兜底）；locale zh/en 键集合一致；**零金额只显 token**（K3 复检期间自查补的口径修正：订阅制 0 价或未定价时，轮级徽章与会话读数都不显示误导性的 ¥0.00，改为 tokens-only 行，新增 locale 键 badge.tokensOnly）。
+- `rates.example.json` 出厂示例；README/CHANGELOG/DEVELOPMENT.md 同步；版本 0.1.3 → 0.2.0（minor：新增能力，向后兼容）。
+
+### 验收标准
+
+1. `node --test` 全绿（基线 11 项原样通过 + 新增 11 项：平价四桶含 cacheWrite、别名、provider 作用域键、unpriced 不编造、mergeRates 叠加与畸形回退、costOfSession 聚合与时空跨度、beijingDay 界、sessionTitleOf、listSessions 枚举与降级、`__proto__` 原型名守卫、sessionId 路径校验）。
+2. 真实日志抽查：枚举本机全部会话可折叠；抽 5 个会话的四桶总量与 DSH 官方 `tokenUsage` 投影缓存逐桶一致。
+3. GUI 实测（需重启 dsh web）：①每条回复下方金额照显（回归不破）；②输入框下方出现会话级读数；③页头「额度汇总」面板数字与抽查一致；④订阅制模型会话只显 token 不显示金额。
+4. 卸载/降版（`pnpm add dsh-turn-cost@0.1.3`）后 GUI 恢复原样，会话数据无损。
+
+### 回滚
+
+- 代码：回退本变更的提交即恢复 0.1.3 行为；不改日志/配置格式，无数据迁移。
+- 部署：profile 目录 `pnpm add dsh-turn-cost@0.1.3` + 重启 dsh web。
+
+### 验证与 K3 复检
+
+- `node --test`：22 项通过、0 项失败（基线 11 项原样通过 + 新增 11 项，复跑稳定 ~100ms）。
+- `node --check`：lib/index.js、lib/client.js、lib/fold.js 语法全过；client 端另有自建无头冒烟（stub react/ctx 执行 factory + apply + 三组件首渲染，断言 slot 名、locale 键集、投影回退渲染、零用量空渲染）。
+- 真实日志抽查（只读 smoke，`%TEMP%\turn-cost-smoke.mjs`）：枚举到 150 个会话全部可折叠；抽 5 个会话（含 366 步的大会话）四桶总量与 `storages/session_projcache.json` 的官方 tokenUsage 投影**逐桶 MATCH 5/5**；按天分组输出正常。
+- 踩坑：①Windows 临时目录首跑触发杀软扫描，listSessions 单测首跑 ~36s、复跑 <100ms（环境噪声）；②ESM import Windows 绝对路径必须 file:// URL；③tierCost 必须容忍样本缺桶字段（Number(x)||0），否则 NaN。
+- 本机部署：profile 副本已同步 0.2.0（lib/package.json/cordis.patch.yml 手工覆盖）；机主费率表已落 `C:\Users\Admin\.dsh\turn-cost-rates.json`（Allegro 四模型 + Token Plan 十三模型全 0 价登记 + qwen 池 deepseek 作用域键）；profile `cordis.patch.yml` 同 id 覆盖 ratesPath。
+- **K3 独立模型审第 1 轮（codex 0.146.0，只读沙箱）**：结论「需修改」——核心五项（fold 不变式、装饰器转译、RPC wire、client 约束、summary 聚合）静态核验全过；3 项实质 + 3 项建议，逐项修复如下：
+  1. package.json `files` 白名单补 `rates.example.json`（出厂示例随 npm 分发）✅
+  2. sessionId 路径校验：fold.js 新增 `isValidSessionId`（`^[A-Za-z0-9._-]+$`），`findSessionFile` 加 resolve 根前缀包含检查（纵深防御），query/sessionTotals 入口改用该校验 ✅（附单测）
+  3. `resolveRateEntry` 全部改 `Object.hasOwn` 守卫，`__proto__`/`constructor`/`toString` 永不命中 ✅（附单测）
+  4. SessionDockLine 会话切换时 `setResult(null)`（useRef 跟踪上一 sessionId），不再短暂显示上一会话数字 ✅
+  5. `summaryCache` 键改为 `workspace/sessionId` ✅
+  6. 文档测试计数订正（8→11）+ `resolveRateEntry` 注释按实际查找顺序（scoped → bare → scoped alias → bare alias）改写 ✅
+- **K3 独立模型审第 2 轮（codex，只读沙箱静态核验）**：结论「**通过（6/6）**」——六项修复逐项核验正确落地，无新增回归。4 条非阻断观察：①`resolveRateEntry` 对 `null` 的防御（已改 `rates == null`）；②`findSessionFile` 盘根病理配置下前缀检查误杀（已修为 `resolvedRoot.endsWith(sep)` 自适应）；③summaryCache 行内注释过时（已改）；④client 投影回退的 `uncachedInputTokens ?? inputTokens` 兜底（已补）。四条均已顺手修复并回归（22/22、client 冒烟、真实日志 MATCH 复过）。
+- GUI 实测（验收 3/4）：待 dsh web 重启窗口，与机主协调。
+
+### 发布记录
+
+- 版本 0.2.0 已 bump；推送与 npm 发布待机主指令（npm 2FA 必须机主本人操作）。
