@@ -207,7 +207,13 @@ B 轻流程（改 bug），机主一句话对齐后修复+复检；本记录按 
 - `node --test`：26/26（基线 22 原样通过 + 新增 4 项：窗口归因边界/垃圾输入、quota 配置解析、原型名守卫）。
 - `node --check`：三个 lib 文件全过；client 无头冒烟 v2（stub react/ctx：三槽位、locale 键集合相等、投影回退渲染 1700 tokens、零用量空渲染、quota 文案键全存在）。
 - 部署副本（profile）与源码 diff 归零；机主费率表已加 `display`/`quota` 块（kimi-usages + aliyun-bl）。
-- Kimi usages 端点在调研阶段已实测 HTTP 200（周窗口 29/100、5h 36/100、加油包 ¥28.79，与 8-22 快照互洽）；**端点级实测待 dsh web 重启窗口**（host 端改动需重启）。
+- Kimi usages 端点在调研阶段已实测 HTTP 200（周窗口 29/100、5h 36/100、加油包 ¥28.79，与 8-22 快照互洽）。
+- **端点级实测（2026-08-24 机主重启后，真实 dsh web 进程内 `/api` 直调）**：
+  1. `turnCost/quota`（kimi 会话 6cdab90a）：kimi-coding ok=true——7d 32/100 剩 68、5h 53/100 剩 47、加油包 ¥28.79、月度 ¥871.21/¥1000、parallel 30；attribution 7d/5h 各 requests=62 share=0.62 ✅
+  2. `turnCost/sessionTotals`（混合模型会话）：`cost=null`、priced=41、unpriced=0（maskCost 生效，金额默认隐藏）✅
+  3. `turnCost/summary`：`showCost=false`、`totals.cost=null`、146 会话 ✅
+  4. `qwen-token-plan-cn` 路由：`bl-failed`（bl 未装，机主配合项待补；错误文案带 GBK 乱码，非阻断）✅ 降级路径符合设计
+- **诚实观察（非阻断）**：本地归因 62 次 > 平台窗口 used=53。即「本会话占比」是**估计值**——DSH 日志调用步数与平台计费请求数非严格 1:1（SDK 重试/缓存命中/续接重放的步可能不被计作新请求）。UI 用「≈」标注，README 明示「仅 DSH 侧、近似」；后续可用单请求探针标定偏差。
 - **K3 独立模型审第 1 轮（codex 0.146.0，只读沙箱）**：结论「需修改」3 项 + 3 条非阻塞：
   1. 轮级徽章在金额隐藏时整条消失（`cost !== number` 即 return）→ 改为仅 `result === null` 返回、`cost > 0` 分流，cost 为 null 走 tokens-only ✅（附冒烟 RPC 用例）
   2. `command` 无字符集校验 + `shell:true` 注入面 → `quotaConfigOf` 加白名单 `^[A-Za-z0-9_.:\\/ -]+$`（拒 shell 元字符），不合规只丢 command、路由保留 ✅（附 evil-cmd 单测）
