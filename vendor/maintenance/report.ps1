@@ -11,15 +11,19 @@ function Get-JsonPropertySafe($Obj, [string]$Name) {
 }
 
 function New-MaintenanceReport([string]$CommandName, $AdapterInfo, [string]$CoreCommit) {
+  $strictAdapter = $null
   if ($null -ne $AdapterInfo) {
-    $hasName = $null -ne (Get-JsonPropertySafe $AdapterInfo 'name')
-    $hasVersion = $null -ne (Get-JsonPropertySafe $AdapterInfo 'version')
-    if (-not ($hasName -and $hasVersion)) { throw 'REPORT_ADAPTER_SHAPE_INVALID: adapter 只允许 {name, version} 白名单形状' }
+    $propNames = @($AdapterInfo.PSObject.Properties.Name | ForEach-Object { $_.ToLower() } | Sort-Object)
+    if (($propNames -join ',') -ne 'name,version') { throw 'REPORT_ADAPTER_SHAPE_INVALID: adapter 属性集合必须严格等于 {name, version}' }
+    $strictAdapter = [pscustomobject]@{
+      name = [string](Get-JsonPropertySafe $AdapterInfo 'name')
+      version = [string](Get-JsonPropertySafe $AdapterInfo 'version')
+    }
   }
   return [pscustomobject]@{
     schema_version = 1
     command = $CommandName
-    adapter = $AdapterInfo
+    adapter = $strictAdapter
     core = [pscustomobject]@{ vendor_commit = $CoreCommit; schema_version = 1 }
     machine = (Get-MachineBlock)
     started_at = [DateTime]::UtcNow.ToString('o')
@@ -35,7 +39,7 @@ function New-MaintenanceReport([string]$CommandName, $AdapterInfo, [string]$Core
 function Format-ReportText([string]$Text) {
   if ($null -eq $Text) { return '' }
   $s = $Text -replace "[\r\n]+", ' '
-  if ($s.Length -gt 200) { $s = $s.Substring(0, 200) + '…' }
+  if ($s.Length -gt 200) { $s = $s.Substring(0, 199) + '…' }
   return $s
 }
 

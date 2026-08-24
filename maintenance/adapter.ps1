@@ -1,7 +1,8 @@
 ﻿# maintenance/adapter.ps1 — dsh-turn-cost 适配层（契约：vendor/maintenance/adapter.schema.json）
 # 范围：DSH/Kimi/Qwen 探测、安装器编排、服务生命周期、回滚、项目 manifest。
 # 纪律：不改 vendor/；不复制通用层函数体（Test-PortOpen/Get-FileSha256 等直接调用通用层）；
-#       报告只收白名单字段；凭据零接触（存在性/哈希可，内容不读不回显）。
+#       报告只收白名单字段；凭据零接触（不进报告/日志/仓库、不打印、不复制；唯一例外：
+#       Kimi loopback bearer 令牌内存即用，见 vendor/maintenance/redaction-rules.md）。
 
 $script:Acc = @{ startedKimi = $false; dshProcess = $null; kimiProcess = $null; extract = $null; backupPath = $null; dshExe = $null; dshHome = $null; baselineProfileHash = $null; zip = $null }
 
@@ -292,23 +293,29 @@ function Get-AcceptanceStages {
 
 function Invoke-AdapterCleanup {
   $problems = New-Object System.Collections.ArrayList
-  # 链失败时先按前置快照恢复验收前 profile（用安装器自带备份）；成功链末尾已按设计重新安装
-  try {
-    $failed = $false
-    try { $failed = [bool]$script:AcceptanceFailed } catch { }
-    if ($failed -and $null -ne $script:Acc.extract -and (Test-Path -LiteralPath (Join-Path $script:Acc.extract 'Install.ps1') -PathType Leaf) -and (Test-PortOpen 3080) -eq $false) {
-      $code = Invoke-AcceptancePs1 'Rollback' $script:Acc.extract
-      if ($code -ne 0) { [void]$problems.Add('失败后回滚退出非零（请人工核对备份目录）') }
-    }
-  } catch { [void]$problems.Add('失败后回滚异常') }
+  # 第一步：停止本链拥有的 DSH 并确认 3080 释放（回滚前置要求端口空闲）
   try {
     if ($null -ne $script:Acc.dshProcess -and -not $script:Acc.dshProcess.HasExited) {
       # DSH 无对外的优雅停止接口；该进程由本验收链启动（所有权明确），直接结束并核对端口释放
       Stop-Process -Id $script:Acc.dshProcess.Id -Force -ErrorAction SilentlyContinue
-      Start-Sleep -Seconds 1
+      $deadline = [DateTime]::UtcNow.AddSeconds(15)
+      do { Start-Sleep -Milliseconds 300 } while ((Test-PortOpen 3080) -and [DateTime]::UtcNow -lt $deadline)
       if (Test-PortOpen 3080) { [void]$problems.Add('DSH 进程已停但 3080 仍监听') }
     }
   } catch { [void]$problems.Add('停止 DSH 进程异常') }
+  # 第二步：链失败时按前置快照恢复验收前 profile（用安装器自带备份）；成功链末尾已按设计重新安装
+  try {
+    $failed = $false
+    try { $failed = [bool]$script:AcceptanceFailed } catch { }
+    if ($failed -and $null -ne $script:Acc.extract -and (Test-Path -LiteralPath (Join-Path $script:Acc.extract 'Install.ps1') -PathType Leaf)) {
+      if (Test-PortOpen 3080) {
+        [void]$problems.Add('3080 仍被占用，无法执行失败后回滚（请人工核对）')
+      } else {
+        $code = Invoke-AcceptancePs1 'Rollback' $script:Acc.extract
+        if ($code -ne 0) { [void]$problems.Add('失败后回滚退出非零（请人工核对备份目录）') }
+      }
+    }
+  } catch { [void]$problems.Add('失败后回滚异常') }
   try {
     if ($script:Acc.startedKimi -and (Test-PortOpen 58627)) {
       try {

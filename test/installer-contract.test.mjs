@@ -88,7 +88,8 @@ test("adapter layer does not redefine generic-layer reserved functions (no core 
     "Write-Report", "ConvertTo-RedactedObject", "Publish-VendorCore",
   ];
   for (const name of reserved) {
-    assert.doesNotMatch(adapter, new RegExp("function\\s+" + name + "\\b"),
+    // PowerShell 函数名不区分大小写；允许 function:/script:/global: 等作用域前缀
+    assert.doesNotMatch(adapter, new RegExp("function\\s+(?:[A-Za-z]+:)?" + name + "\\b", "i"),
       "adapter redefines generic function " + name);
   }
 });

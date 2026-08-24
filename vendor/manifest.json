@@ -1,8 +1,8 @@
 ﻿{
     "schemaVersion":  1,
     "sourceRepo":  "WFMinerva/tool-library",
-    "commit":  "0fbd88ce11d419894a406c8acec855eabd0aa32d",
-    "generatedAt":  "2026-08-24T18:23:30.7815367Z",
+    "commit":  "922676e12b8a8260aa9399cd34f7858cf39342aa",
+    "generatedAt":  "2026-08-24T18:34:55.0948271Z",
     "files":  [
                   {
                       "path":  "core.ps1",
@@ -10,7 +10,7 @@
                   },
                   {
                       "path":  "vendor.ps1",
-                      "sha256":  "D81ADF24E5FD9A0BEE0493AFD61D8999DD5439F49A0B6F9E4649EEAACBB5E0CA"
+                      "sha256":  "C8EA45CB0067570D69E22861706CFABCBCDDAF8D7656914DCEE24C661F5DADFA"
                   },
                   {
                       "path":  "redaction.ps1",
@@ -26,7 +26,7 @@
                   },
                   {
                       "path":  "report.ps1",
-                      "sha256":  "B3920BD2B9319655F1294426D54334C6AF45F7C50967262A15C97FBC999CEAA6"
+                      "sha256":  "80F83A123B081BC687459FA684A047513164D8BBD58B25D13F8F5A1B850527CF"
                   },
                   {
                       "path":  "report.schema.json",

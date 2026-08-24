@@ -1,5 +1,6 @@
 ﻿# vendor.ps1 — 统一维护基础设施 · vendor 快照发布（通用层）
-# 只从干净提交发布：源仓库工作区必须干净，来源 SHA 一律取 HEAD；
+# 只从干净提交发布：待发布源子树（tools/maintenance）必须干净（脏树检查仅覆盖该子树，
+# 理由见方案文档 §3.3-1），来源 SHA 一律取 HEAD；
 # 目标固定写入 <目标仓库根>/vendor/maintenance，配哈希清单（基本路径边界 + 哈希互校）。
 
 function Publish-VendorCore([string]$SourceRoot, [string]$TargetRoot) {
