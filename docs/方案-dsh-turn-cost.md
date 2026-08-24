@@ -91,7 +91,7 @@
 
 ### 状态
 
-门一已确认（tool-library 立项「DSH 对话额度表」，门一/门二均机主拍板 2026-08-24；判级 A→C，实施以本变更记录为准，立项档案见 tool-library `docs/方案-DSH对话额度表.md`）；实施完成；K3 双层复检通过（机器验 0 FAIL + codex 独立模型审第 2 轮「通过」）；GUI 实测待 dsh web 重启窗口；待门三。
+门一已确认（tool-library 立项「DSH 对话额度表」，门一/门二均机主拍板 2026-08-24；判级 A→C，实施以本变更记录为准，立项档案见 tool-library `docs/方案-DSH对话额度表.md`）；实施完成；K3 双层复检通过（机器验 0 FAIL + codex 独立模型审第 2 轮「通过」）；启动事故经变更记录 #4 修复后，端点级实测通过（见下「验证与 K3 复检」末节）；待门三。
 
 ### 需求
 
@@ -140,7 +140,11 @@
   5. `summaryCache` 键改为 `workspace/sessionId` ✅
   6. 文档测试计数订正（8→11）+ `resolveRateEntry` 注释按实际查找顺序（scoped → bare → scoped alias → bare alias）改写 ✅
 - **K3 独立模型审第 2 轮（codex，只读沙箱静态核验）**：结论「**通过（6/6）**」——六项修复逐项核验正确落地，无新增回归。4 条非阻断观察：①`resolveRateEntry` 对 `null` 的防御（已改 `rates == null`）；②`findSessionFile` 盘根病理配置下前缀检查误杀（已修为 `resolvedRoot.endsWith(sep)` 自适应）；③summaryCache 行内注释过时（已改）；④client 投影回退的 `uncachedInputTokens ?? inputTokens` 兜底（已补）。四条均已顺手修复并回归（22/22、client 冒烟、真实日志 MATCH 复过）。
-- GUI 实测（验收 3/4）：待 dsh web 重启窗口，与机主协调。
+- **端点级实测（验收 3，2026-08-24，变更记录 #4 修复后的真实 dsh web 进程内）**：经 `/api/<endpoint>` HTTP 传输直调三端点（信封 `{args:{request}}`，与 client.js 的 `ctx.connection.rpc.call("/api", …)` 同源）——
+  1. `turnCost/query`（轮级徽章回归）：多轮会话逐轮取值正确分化（session-11819f17：turn1 in=26320/out=4548 ≠ turn2 in=8623/out=3800）✅
+  2. `turnCost/sessionTotals`（会话读数）：k3-256k 会话 6cdab90a（62 步）四桶与官方 `tokenUsage` 投影缓存**逐桶 MATCH 4/4**（101137/17273/2974208/0，node 程序化断言）✅
+  3. `turnCost/summary`（跨对话汇总）：9 模型 × 7 天分组正常；官方价模型计价（deepseek-v4-pro 合计 ¥620.55；混合模型会话 session-675ee35c ¥0.2629，priced=37 unpriced=0）✅
+  4. 订阅制口径：k3-256k/kimi-for-coding/qwen3.6-flash 会话 cost=0 且 priced 计入、unpriced=0 → client 渲染 tokens-only（数据面已证；像素面机主目检随门三一并确认）✅
 
 ### 发布记录
 
@@ -174,4 +178,4 @@
 
 ### 门禁
 
-B 轻流程（改 bug），机主一句话对齐后修复+复检；本记录按 C 口径落盘。GUI 实测（变更记录 #3 验收 3/4）仍待 dsh web 重启窗口——现在机主可自行重启，顺带完成实测。
+B 轻流程（改 bug），机主一句话对齐后修复+复检；本记录按 C 口径落盘。变更记录 #3 的验收 3 已于修复后完成端点级实测（见 #3「验证与 K3 复检」末节），像素面随门三由机主目检确认。
