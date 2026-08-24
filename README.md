@@ -2,14 +2,14 @@
 
 [![featured in awesome-dsh-plugin](https://img.shields.io/badge/awesome--dsh--plugin-featured-2ea44f)](https://github.com/beancookie/awesome-dsh-plugin)
 
-DeepSeek Harness（dsh）Web UI 插件：**按对话实际用的路由分流显示**——官方按量模型（DeepSeek）显示金额（¥），Kimi/阿里 Token Plan 订阅路由显示「本轮 token + 消耗会员额度百分之几 + 剩余百分之几」；另有会话级/跨对话汇总。
+DeepSeek Harness（dsh）Web UI 插件：**按对话实际用的路由分流显示**——官方按量模型（DeepSeek）显示金额（¥），Kimi/阿里 Token Plan 订阅路由显示「本轮 token + 官方额度窗口已用/剩余比例」；另有会话级/跨对话汇总。
 
-A [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (dsh) web plugin that shows, per conversation and per turn, **which route the model actually used**: pay-as-you-go DeepSeek turns show money (¥) while Kimi / Alibaba Token Plan subscription turns show tokens plus the quota window share consumed and the percentage remaining; session-level and cross-session summaries round it out. Ships the [official DeepSeek CNY peak/off-peak rates](https://api-docs.deepseek.com/quick_start/pricing/) and accepts your own rate table.
+A [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (dsh) web plugin that shows, per conversation and per turn, **which route the model actually used**: pay-as-you-go DeepSeek turns show money (¥), while Kimi / Alibaba Token Plan subscription turns show tokens plus official window used/remaining percentages; session-level and cross-session summaries round it out. Ships the [official DeepSeek CNY peak/off-peak rates](https://api-docs.deepseek.com/quick_start/pricing/) and accepts your own rate table.
 
-> 官方按量：本轮 ¥0.23 · 1.2万 token · 缓存读 98% ／ Kimi 订阅：本轮 12.3万 token · 5h 额度消耗 12% · 剩余 47% ／ Qwen 订阅：本轮 3.4万 token · 剩余 40%
+> 官方按量：本轮 ¥0.23 · 1.2万 token · 缓存读 98% ／ Kimi 订阅：本轮 12.3万 token · 5h 已用 12% · 剩余 88% ／ Qwen 订阅：本轮 3.4万 token · 剩余 40%
 
-- **订阅额度窗口（0.3.0）**：Kimi 订阅走官方 `GET /coding/v1/usages` 端点读 5 小时/7 天窗口的已用/上限/剩余/重置时间与加油包余额；阿里 Token Plan 走官方 `bl usage token-plan` CLI——见下文「订阅额度窗口」
-- **单对话/单轮占比**：Kimi 路由显示「本轮在 5h 窗口发起 N 次 ≈ 占窗口 X%」（配额单位=请求数；仅 DSH 发起的调用可归因）；阿里侧因 Credits 无法精确归因，只显示剩余比例（不编造消耗百分比）
+- **订阅额度窗口（0.3.0）**：Kimi 订阅走官方 Kimi Code 本地 OAuth 服务读取 5 小时/7 天窗口与加油包；阿里 Token Plan 走官方 `bl usage token-plan` CLI——见下文「订阅额度窗口」
+- **不编造单轮额度归因**：官方接口只给账号窗口已用/剩余，不给某一轮的可靠扣减；Kimi 徽章显示当前 5h 窗口已用/剩余，阿里徽章显示当前剩余比例
 - **人民币计价**，内置 [DeepSeek 官方定价](https://api-docs.deepseek.com/zh-cn/quick_start/pricing/)（峰谷按北京时间）——官方按量路由显示金额，订阅路由按 0 价登记只显 token
 - **自定义费率表**：任意模型可配单价（含缓存写），订阅制模型按 0 价登记只显 token
 - 金额基于 **provider 上报的真实 usage**（未缓存输入 / 缓存读 / 输出分桶计费），不是估算 token 数
@@ -47,9 +47,9 @@ A [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (dsh) web 
 }
 ```
 
-- **kimi-usages**：调 `GET https://api.kimi.com/coding/v1/usages`（Kimi Code 官方端点），凭据默认从 `<dsh-home>/.credentials.yaml` 的 `KIMI_CODING_API_KEY` 内存解析（可用 `credentialRef` 换引用名，`baseUrl` 换端点）；返回 5 小时/7 天窗口 + 加油包，host 端 60 秒 TTL 缓存
+- **kimi-usages**：先安装并登录官方 Kimi Code CLI，运行 `kimi web --no-open`；插件只连接 `http://127.0.0.1:58627/api/v1/oauth/usage`，从 `~/.kimi-code/server.token` 读取本地 bearer（不回显）。可用 `baseUrl` 改 loopback 端口，但远程 URL 会被配置守卫拒绝；成功结果缓存 60 秒
 - **aliyun-bl**：调官方百炼 CLI `bl usage token-plan --output json`（先 `npm i -g bailian-cli` 并完成控制台登录；可用 `command` 改可执行名）。未安装/未登录/输出不认得都安静降级为「暂读不到」
-- **占比口径**：Kimi 窗口按**请求数**计；「本会话占比」= 该对话日志里落在当前窗口内的 LLM 调用数 ÷ 窗口上限（只覆盖 DSH 发起的调用；Kimi CLI/桌面端消耗同一池子但无法归因到对话——「还剩多少」以端点实时读数为准，天然包含它们）
+- **占比口径**：Kimi 本地服务返回的 `used/limit` 是账号额度刻度；请求次数与额度百分比不是同一量纲，插件不再计算“本轮/本会话消耗%”
 - 阿里 Token Plan 以动态 Credits 计量且官方未公开系数表，**不做单对话占比**（不编造），只显示窗口「已用/还剩」
 
 平台读数失败的窗口在面板上显示「暂读不到（原因）」，永不阻塞界面。
@@ -93,11 +93,11 @@ A [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (dsh) web 
 
 ## 隐私
 
-**只读本机数据；唯一的网络出站是机主自己配置的官方额度读数端点。**
+**只读本机数据；Kimi 额度只访问 loopback 官方服务，阿里额度由本机官方 CLI 访问其服务。**
 
 - token 账与金额来自本机 dsh 会话日志与本机费率表 JSON，不出本机
-- 0.3.0 起若配置 `quota` 块：Kimi 路由会向 `api.kimi.com`（或你自配的 baseUrl）发只读 `GET /usages`；阿里路由由本机官方 `bl` CLI 与其控制台会话通信——除此之外无任何网络访问、无任何上报
-- 订阅 API 密钥只在内存里从 dsh 自己的受管凭据库（`.credentials.yaml`）解析后用于上述请求，**不打印、不落盘、不转发给任何第三方**
+- 0.3.0 起若配置 `quota` 块：Kimi 路由只访问 `127.0.0.1`/ `localhost` 的官方 Kimi Code Server，由该服务持有 OAuth 与上游通信；阿里路由由本机官方 `bl` CLI 与其控制台会话通信
+- 插件不再读取 Kimi 模型 API key；本地 server token 只用于 loopback 请求，**不打印、不进入 Remote 响应**
 - 界面上的金额是**估计值**（provider 上报 token 数 × 费率表单价），仅供个人参考，不构成账单；订阅套餐的实际额度以平台官方读数为准
 
 ## 计费口径与边界

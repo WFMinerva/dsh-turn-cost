@@ -35,7 +35,7 @@
   "quota": {
     "kimi-coding": {
       "kind": "kimi-usages",
-      "_note": "Kimi 订阅窗口：GET https://api.kimi.com/coding/v1/usages；凭据默认取 .credentials.yaml 的 KIMI_CODING_API_KEY，可用 credentialRef 改名"
+      "_note": "Kimi 订阅窗口：先运行 kimi web --no-open；插件访问官方 loopback OAuth usage API，可用 baseUrl 改本地端口"
     },
     "qwen-token-plan-cn": {
       "kind": "aliyun-bl",

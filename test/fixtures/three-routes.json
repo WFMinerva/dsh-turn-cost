@@ -11,7 +11,7 @@
     "aliases": {}
   },
   "quota": {
-    "kimi-coding": { "kind": "kimi-usages", "baseUrl": "https://example.invalid/coding/v1" },
+    "kimi-coding": { "kind": "kimi-usages", "baseUrl": "http://127.0.0.1:58627" },
     "qwen-token-plan-cn": { "kind": "aliyun-bl", "command": "bl" }
   },
   "routes": [

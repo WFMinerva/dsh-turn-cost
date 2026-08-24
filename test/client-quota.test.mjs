@@ -82,11 +82,11 @@ const baseResult = {
 test("real client badge selects Kimi 5h data for kimi-coding", () => {
   const view = renderBadge(
     { ...baseResult, provider: "kimi-coding" },
-    { routes: { "kimi-coding": { ok: true, windows: [{ name: "5h", limit: 10, remaining: 8 }] } } },
+    { routes: { "kimi-coding": { ok: true, windows: [{ name: "5h", limit: 100, used: 20, remaining: 80 }] } } },
   );
   assert.match(view.props.title, /^badge\.quotaTitle/);
   assert.match(view.props.children, /^badge\.quota /);
-  assert.match(view.props.children, /"share":"20%"/);
+  assert.match(view.props.children, /"used":"20%"/);
   assert.match(view.props.children, /"remaining":"80%"/);
 });
 

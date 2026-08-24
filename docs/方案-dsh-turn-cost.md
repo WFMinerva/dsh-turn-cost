@@ -305,13 +305,20 @@ B 轻流程（改 bug），机主一句话对齐后修复+复检；本记录按 
    - client 分支必须由可执行 seam 证明：装载真实 `lib/client.js` bundle、捕获实际 assistant badge slot 并渲染 `kimi-coding`、`qwen-token-plan-cn`、历史 `qwen-token-plan` 三个 provider id；不得只 grep 源码字符串。额度纯规范化函数如需测试接缝，只能放在未列入 package exports 的内部模块，保持公开 API 与业务语义不变。
    - 夹具层零网络、零凭据、零真实 DSH 依赖；它证明业务分流与降级，不冒充单位环境的真实路由或额度验收。
 
+### 门二验收口径重拍（2026-08-24，机主批准）
+
+- 原方案把“单位 DSH 真实启动”设为门三硬门，混淆了通用插件启动兼容性与某台机器的部署状态。机主明确本地也要配置 Kimi/Qwen，机器间只更换各自凭据；因此不再要求必须到单位机才能证明本项目成立。
+- 门三硬门改为：在**任一真实 DSH web profile** 中安装候选 `.tgz`，完成插件树启动/监听、DeepSeek 预设与本地 Kimi/Qwen 三路由验证、干净停止和回滚，即可证明本次通用修复与复用路径。家用机可作为该真实环境。
+- 单位机后续只复核自己的凭据、网络和百炼 CLI 登录状态，属于部署环境冒烟，不再阻断本项目门三；未经单位实测不得声称“单位环境已通过”。
+- 家用机保留既有 `qwen3-local` 路由；新增订阅/API 路由使用内置 catalog id `kimi-coding` 与 `qwen-token-plan-cn`。凭据只通过 DSH 受管凭据写入，不写进仓库或普通配置字段。
+
 ### 三层验证边界（不互相替代）
 
 | 层级 | 环境与输入 | 必须证明 | 明确不能证明 |
 |---|---|---|---|
 | 1. Config 冒烟 | CI/local 的锁定依赖；真实 import；无网络、无凭据 | host 入口能 import，Schemastery `Config` 能定义，合法/错误配置值语义正确 | 三路由业务分流、真实 dsh web 插件树、单位模型可用性 |
 | 2. 脱敏三路由夹具 | 固定脱敏会话/事件；无网络、无凭据、无真实 DSH | 模型取值、provider 分流、旧 Qwen id 兼容、单路由失败降级 | 真实平台额度、真实配置文件、真实 DSH 启动 |
-| 3. 单位 DSH 真实启动 | 机主授权后的单位 DSH 实机、实际 profile 与启动入口 | **发布前必验**：真实插件树完成加载并监听；启动后可干净停止且无残留；如另做路由实测，结果只写脱敏证据 | CI 或夹具不能替代；若未获授权或单位环境不可用，则门三阻断、保持未交付，不能以“未验证”收尾；本轮尚无 Qwen/Kimi 实机通过证据 |
+| 3. 真实 DSH 启动 | 机主授权的任一真实 DSH 实机、实际 profile 与启动入口 | **发布前必验**：候选包真实安装，插件树完成加载并监听；DeepSeek/Kimi/Qwen 路由可用；启动后可干净停止且无残留；回滚路径成立 | CI 或夹具不能替代；通过机器只证明该机实测，不能冒充其他机器的凭据/网络已通过 |
 
 ### 实施范围与文档
 
@@ -326,8 +333,8 @@ B 轻流程（改 bug），机主一句话对齐后修复+复检；本记录按 
 - CI 使用 Node `24.18.0`；lockfile 生成所用 npm `11.16.0` 已记录在 `packageManager` 与开发文档，不能改回只固定主版本或范围。
 - 静态规则对 Config 内违规 Schemastery API 稳定失败，对合法 Config 与 Config 外 `Date.parse` 稳定通过；正反夹具均在 CI 执行。
 - 脱敏夹具覆盖三种 canonical 路由和历史 Qwen id，模型来自日志；Kimi 5h/remaining、Qwen `remainingPercent`、`quotaForRoute` 单路由异常隔离均由真实执行的断言覆盖；真实 client bundle seam 证明三个 provider id 选择正确的展示数据，单路由失败安静降级且不阻断 host 启动路径。
-- **发布前必验**：门三前由机主授权完成一次单位 DSH 真实启动验收：插件树加载、监听、干净停止、无残留；若未获授权或单位环境不可用，门三阻断、保持未交付，不能只记录“未验证”后继续交付，也不得用 CI/夹具填充为通过。Qwen/Kimi 的真实状态在此之前仍是机主陈述。
-- 实施后必须运行 `node --test`、语法检查、CI、`git diff --check` 与仓库要求的 `python tools/checks.py --json`；机器验 0 FAIL 后才进入独立模型 K3 复检。单位 DSH 真实启动仍是门三硬门。
+- **发布前必验**：门三前由机主授权在任一真实 DSH profile 完成候选包安装、插件树加载/监听、DeepSeek/Kimi/Qwen 三路由、干净停止和回滚验收；未完成即门三阻断，也不得用 CI/夹具填充为通过。其他机器在各自实测前保持“未验证”。
+- 实施后必须运行 `node --test`、语法检查、CI、`git diff --check` 与仓库要求的 `python tools/checks.py --json`；机器验 0 FAIL 后才进入独立模型 K3 复检。任一真实 DSH profile 的候选包启停、路由和回滚仍是门三硬门。
 
 ### 实施（门二已拍板，2026-08-24）
 
@@ -336,17 +343,23 @@ B 轻流程（改 bug），机主一句话对齐后修复+复检；本记录按 
 - 新增内部 `lib/quota.js`，仅提取并导出额度规范化纯函数供宿主和脱敏测试共享；未加入 package exports，公开 API 不变。新增 `test/client-quota.test.mjs`，通过 VM 装载真实 client bundle 并执行实际 slot component，证明三个 provider id 的分支展示；`test/route-fixtures.test.mjs` 直接验证 Kimi/Qwen 规范化和两路由异常隔离。静态违规夹具使用文本扩展名，避免被 Node test runner 当作可执行测试；Config 区域无法唯一定位或对象级链式调用违规时静态门禁失败关闭。
 - `docs/DEVELOPMENT.md` 已同步依赖/版本门禁、测试调用方式、Config 上下文范围和三层验证硬边界；`.gitignore` 忽略 `node_modules/` 与 npm debug 日志。
 
-### 验证记录（门三未完成）
+### 验证记录（家用机真实 DSH，门三进行中）
 
 - `node --version` / `npm --version`：`v24.18.0` / `11.16.0`；`package-lock.json` 由该 Node/npm 组合生成，`packageManager` 记录精确 npm 版本。
 - `npm ci --ignore-scripts --no-audit --no-fund`：按 CI 完全相同命令成功安装锁定依赖；GitHub Actions workflow 本身本轮未远程触发，不把本地结果写成 CI 已实跑。
 - 目标回归：manifest contract、真实 host import/Config、Config 静态规则、脱敏路由夹具 **18/18 通过**；新增 Kimi 5h/remaining、Qwen `remainingPercent`、`quota()` 两路隔离，以及真实 client bundle 的三个 provider 分支执行断言。
-- 全量 `node --test`：**44/44 通过**；`lib/index.js`、`lib/client.js`、`lib/fold.js`、`lib/quota.js` 分别执行 `node --check` 均通过（不能把多个文件作为一次 `node --check` 调用，否则 Node 只检查第一个参数）。
+- 全量 `node --test`：最终 **45/45 通过**；`lib/index.js`、`lib/client.js`、`lib/fold.js`、`lib/quota.js` 分别执行 `node --check` 均通过（不能把多个文件作为一次 `node --check` 调用，否则 Node 只检查第一个参数）。新增断言证明异常正文中的 `Authorization`/`Bearer`/诱饵密钥不会跨 Remote 边界，并禁止重新引入 child-process `shell:true`。
 - `npm pack --dry-run --json --ignore-scripts`：独立审计在家用机复核成功；发布清单明确包含 `lib/quota.js`，确认内部规范化模块不会因打包清单遗漏而失效。
 - 静态规则实证：生产 `lib/index.js` 通过；Config 外合法 `Date.parse` 正例通过；Config 内 `.optional()`、`.nullable()`、`.parse()`、`.safeParse()` 反例均被拦截。
 - 根仓库 `python tools/checks.py --json`：C1–C5、C8 PASS，C6 INFO，C7 WARN（当前工作区有本次未提交变更），**0 FAIL**；命令因 WARN 返回退出码 1，未用 `--no-verify` 绕过。
-- **单位 DSH 真实启动未执行**：机器指纹匹配家用机而非单位机，不能跨机套用单位环境；因此未启动真实 DSH，也未验证 Qwen/Kimi live 路由或额度。该项不是“可忽略的未验证”，而是发布前门三阻断条件。
-- **K3 独立模型复检**：前 3 轮已记录：第 1 轮指出 CI 多文件 `node --check` 和 Config 无法定位时失败关闭两项 P2；第 2 轮指出对象级 `z.object(...).optional()` 扫描缺口；第 3 轮因只读沙箱 `mkdtemp` 两项 `EPERM` 与模型超时未形成结论。本轮新增额度/真实 client seam 和精确 CI 安装命令后，独立审计第三轮在家用机重新执行并确认：精确安装成功，目标回归 **18/18**、全量 **44/44**，四个 lib 文件语法通过，`git diff --check` 无错误，根检查 0 FAIL/C7 WARN，`npm pack --dry-run --json --ignore-scripts` 成功且包含 `lib/quota.js`；人工核对确认额度纯函数提取语义等价、未加入 package exports，route/client 夹具均实际执行。结论为**代码侧 K3 审通过，无新增问题**。该结论不覆盖单位 DSH 真实启动，门三硬门仍阻断。
+- **家用机真实 DSH 已执行**：安装本地候选 `.tgz` 后，`npx @deepseek-ai/dsh web --no-open` 正常监听 `127.0.0.1:3080`，插件列表显示 `turn-cost` 已挂载/启用；模型选择器同时列出 DeepSeek、`kimi-coding`、`qwen-token-plan-cn`，并保留原 `qwen3-local`。
+- **DeepSeek live 路由已通过**：新建真实会话发送“只回复 OK”，模型成功回复；turn-cost 同轮显示约 `¥0.02`、约 `1.3万 token` 和缓存读比例，证明 provider→日志→host→client→费率表整链可用。
+- **Kimi live 路由部分通过**：机主在家用 DSH 手动配置新 API 后，`Kimi K3` 真实会话发送“只回复 OK”并成功回复，turn-cost 同轮显示约 `1.1万 token`。本地费率配置的旧凭据引用 `KIMI_API_KEY` 已改为实际 `KIMI_CODING_API_KEY`；随后脱敏直连探针确认 `GET https://api.kimi.com/coding/v1/usages` 返回 HTTP 401，因此额度面板稳定降级为 `kimi-usages-failed`。该 API 可聊天但无当前额度接口权限，5h 消耗/剩余仍未通过，不能记为完整门三通过。
+- **Qwen live 路由完整通过**：`Qwen3.6 Flash` 真实会话两次发送“只回复 OK”均成功回复；首轮 turn-cost 显示约 `1.3万 token`。完成 `bl auth login --console` 后，`bl auth status` 为 authenticated、`bl usage token-plan --output json` 成功返回周额度字段；DSH 额度面板显示“7 天限额：已用 23% · 剩余 77%”，第二轮徽章显示“本轮 1.3万 token · 剩余 77%”。
+- **新增脱敏与命令边界修复实证**：首次真实 UI 发现 `bl-failed` 拼接 CLI 原始错误正文；已改为仅返回固定错误码，移除非 JSON/不识别输出的 `raw` 字段，并移除 `execFile` 的 `shell:true`。后续复核发现 Windows 显式 `cmd.exe /c` 仍允许带空格的 `command` 形成嵌套命令且路径含空格会失效；现将配置收紧为 PATH 中的单个可执行文件名（拒绝路径、空白和参数），并增加 `cmd /c echo NESTED` 与带空格路径反例。重装最终候选后 Qwen 额度成功，错误正文未跨 Remote 边界，进程无 DEP0190 警告。
+- **回滚与停止实证**：候选目录无删除地切换到备份 `0.1.2` 后，DSH 启动并返回 HTTP 200；再切回候选 `0.3.0`，四项模型配置仍在。最终停止后 3080 监听数为 0。旧副本保留在脱敏备份目录，可恢复。
+- 最终本机候选包：`dsh-turn-cost-0.3.0.tgz`，SHA-256 `381B5FCBC396A794F4C8716A18B800FB8A388C7C23BF6586D80F75322AD3E9D7`；仅用于本机 profile 验证，未 npm 发布。
+- **K3 边界**：历史 K3 发现与修复记录保留；本轮按机主明确指令“不跑 K3，以实测为准”，未形成新的独立模型 verdict，也不把人工/真实 DSH 实测冒充为 K3 通过。当前门三仍因 Kimi `/usages` HTTP 401 阻断。
 
 ### 回滚
 
@@ -354,7 +367,7 @@ B 轻流程（改 bug），机主一句话对齐后修复+复检；本记录按 
 - 若精确 `npm ci --ignore-scripts --no-audit --no-fund`、真实 host import 或静态规则失败，保持阻断并修复依赖/测试边界，不降级为“只看纯函数通过”、全局安装或宽松安装。
 - 单位环境：不自动改模型、凭据、profile 或服务；只在机主明确授权后按记录执行启动、停止或回退。
 
-### 明日单位机接手待办（2026-08-25）
+### 其他机器部署待办（原单位机清单，2026-08-25）
 
 - [ ] 先按 tool-library `本机环境一句话.md` 读取硬件指纹，唯一匹配单位机后再读 `machines/单位机.md`；不套用家用机路径、代理或服务结论。
 - [ ] 从 GitHub 候选分支 `codex/config-startup-regression-gates` 取得代码，核对候选 commit；该分支保持“未交付”状态，不直接合入 `master`。
@@ -365,8 +378,18 @@ B 轻流程（改 bug），机主一句话对齐后修复+复检；本记录按 
 - [ ] 用单位现有会话或脱敏新会话核对：DeepSeek 按量显示金额，Kimi 显示 5h 消耗/剩余，Qwen 显示剩余比例，历史 `qwen-token-plan` 会话仍兼容。没有实测到的项目明确记“未验证”，不得猜测为通过。
 - [ ] 停止 dsh web 后检查无残留进程；按备份恢复旧版本并复启一次，再重新安装候选包，实证回滚与恢复路径。
 - [ ] 只落盘脱敏证据：日期、单位机硬件匹配、候选 commit、包 SHA-256、Node/npm 版本、测试计数、监听结果、三路由结果、停止/残留和回滚结果；不记录密钥、账号、原始日志或完整 profile。
-- [ ] 单位实测全部通过后更新本节和门禁状态，再请求门三确认。远程 Actions 只有在创建 PR 或更新 `master` 时才会触发；仅推送候选分支不得写成 CI 已通过。未经新的明确指令不合并 `master`、不发布 npm。
+- [ ] 其他机器实测全部通过后更新本节；这只证明该机部署状态，不再阻断家用机门三。远程 Actions 只有在创建 PR 或更新 `master` 时才会触发；仅推送候选分支不得写成 CI 已通过。未经新的明确指令不合并 `master`、不发布 npm。
 
 ### 门禁
 
-门一已确认，门二已由机主批准并完成方案范围内实施与自动验证；当前停在门三。由于当前机器不是单位机，单位 DSH 真实启动这一发布前硬门未满足，**门三阻断，保持未交付**。不得以 44/44 单测、未远程实跑的 CI 配置或脱敏夹具替代真实启动；推送与 npm 发布继续只接受机主明确指令。
+门一已确认，门二已由机主批准；家用机已完成候选安装、真实 DSH 启停、DeepSeek/Kimi/Qwen 三路 live 调用、两类额度成功读数、脱敏失败路径和回滚实证。本轮机主明确要求不跑 K3、以实测为准，因此没有新的独立模型 verdict，也不把该项写成通过。机主已于 2026-08-24 确认门三，本轮正式交付；推送与 npm 发布继续只接受机主新的明确指令。
+
+### 变更记录 #8（Kimi 官方 OAuth 用量链路，2026-08-24）
+
+- **问题**：官方文档复核与家用机实测证明，Kimi 模型 API key 可完成推理，但直连 `https://api.kimi.com/coding/v1/usages` 返回 401；官方公开的程序化套餐用量接口是 Kimi Code 本地服务 `GET /api/v1/oauth/usage`，依赖 `/login` 的托管 OAuth。
+- **修复**：`kimi-usages` 改为只连接 `127.0.0.1|localhost` 的官方 Kimi Code Server，默认 `http://127.0.0.1:58627`；从 `~/.kimi-code/server.token` 读取 loopback bearer，不再读取 DSH `.credentials.yaml` 或模型 API key。远程 URL、外部 HTTP host 和旧 `credentialRef` 均被配置守卫丢弃。
+- **口径纠正**：官方本地接口的常见 `limit=100` 是额度百分比刻度，不是 100 次请求；删除“请求数÷100”形成的本轮/本会话额度消耗估算。Kimi 每轮徽章和会话读数改为当前“5h 已用 X% · 剩余 Y%”，不再声称单轮归因。
+- **机器验证**：本机已有官方 Kimi Code CLI `0.29.1`，`kimi doctor` 通过且 OAuth 已登录。官方本地接口实测 HTTP 200/`kind=ok`；安装候选后 DSH 面板显示 Kimi 7d 34%/66%、5h 0%/100%、加油包 ¥28.79/¥871.21/¥1000，Qwen 保持 23%/77%；新 Kimi K3 会话回复 OK，每轮徽章与会话读数均显示“1.1万 token · 5h 已用 0% · 剩余 100%”。
+- **自动回归**：新增 loopback HTTP + server token 真实 seam；全量测试 46/46，四个 lib 文件语法检查和 `git diff --check` 通过；根 `python tools/checks.py --json` 为 0 FAIL/C7 WARN（根清单与嵌套项目均有本轮未提交改动）。最终候选 SHA-256 为 `381B5FCBC396A794F4C8716A18B800FB8A388C7C23BF6586D80F75322AD3E9D7`。
+- **运行边界**：turn-cost 不擅自启动、登录或长期管理 Kimi 服务；使用 Kimi 额度显示前，由机主运行 `kimi web --no-open`。服务未运行或 token 缺失时只返回固定错误码，不影响 DSH 对话。实测结束后 DSH 3080 与 Kimi 58627 监听均为 0。
+- **门禁**：机主于 2026-08-24 确认门三；本变更正式交付。未提交、未推送、未发布 npm 的状态在后续维护基线中另行记录。

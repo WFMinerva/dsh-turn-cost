@@ -310,22 +310,28 @@ test("quotaConfigOf: quota routes validated; absent blocks → empty table", () 
   assert.deepEqual(quotaConfigOf("junk"), {});
   const quota = quotaConfigOf({
     quota: {
-      "kimi-coding": { kind: "kimi-usages", credentialRef: "KIMI_CODING_API_KEY", baseUrl: "https://api.kimi.com/coding/v1" },
+      "kimi-coding": { kind: "kimi-usages", baseUrl: "http://127.0.0.1:58627" },
       "qwen-token-plan-cn": { kind: "aliyun-bl", command: "bl" },
       "bad-kind": { kind: "nonsense" },            // unknown kind — skipped
       "not-object": "nope",                        // malformed — skipped
-      "bad-ref": { kind: "kimi-usages", credentialRef: "lower case" }, // ref grammar enforced
-      "http-base": { kind: "kimi-usages", baseUrl: "http://insecure.example" }, // https only
+      "obsolete-ref": { kind: "kimi-usages", credentialRef: "KIMI_CODING_API_KEY" }, // old field ignored
+      "remote-base": { kind: "kimi-usages", baseUrl: "https://api.kimi.com/coding/v1" }, // loopback only
+      "foreign-http": { kind: "kimi-usages", baseUrl: "http://192.0.2.1:58627" }, // loopback only
       "evil-cmd": { kind: "aliyun-bl", command: "bl && echo pwned" },  // shell metacharacters rejected
+      "nested-cmd": { kind: "aliyun-bl", command: "cmd /c echo NESTED" }, // arguments rejected
+      "path-cmd": { kind: "aliyun-bl", command: "C:\\Program Files\\bl.cmd" }, // paths rejected
     },
   });
-  assert.deepEqual(quota["kimi-coding"], { kind: "kimi-usages", credentialRef: "KIMI_CODING_API_KEY", baseUrl: "https://api.kimi.com/coding/v1" });
+  assert.deepEqual(quota["kimi-coding"], { kind: "kimi-usages", baseUrl: "http://127.0.0.1:58627" });
   assert.deepEqual(quota["qwen-token-plan-cn"], { kind: "aliyun-bl", command: "bl" });
   assert.equal(Object.hasOwn(quota, "bad-kind"), false);
   assert.equal(Object.hasOwn(quota, "not-object"), false);
-  assert.deepEqual(quota["bad-ref"], { kind: "kimi-usages" });
-  assert.deepEqual(quota["http-base"], { kind: "kimi-usages" });
+  assert.deepEqual(quota["obsolete-ref"], { kind: "kimi-usages" });
+  assert.deepEqual(quota["remote-base"], { kind: "kimi-usages" });
+  assert.deepEqual(quota["foreign-http"], { kind: "kimi-usages" });
   assert.deepEqual(quota["evil-cmd"], { kind: "aliyun-bl" }); // command dropped, route kept
+  assert.deepEqual(quota["nested-cmd"], { kind: "aliyun-bl" });
+  assert.deepEqual(quota["path-cmd"], { kind: "aliyun-bl" });
   assert.ok(QUOTA_KINDS.has("kimi-usages") && QUOTA_KINDS.has("aliyun-bl"));
 });
 
