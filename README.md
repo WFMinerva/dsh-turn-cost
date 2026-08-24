@@ -2,14 +2,16 @@
 
 [![featured in awesome-dsh-plugin](https://img.shields.io/badge/awesome--dsh--plugin-featured-2ea44f)](https://github.com/beancookie/awesome-dsh-plugin)
 
-DeepSeek Harness（dsh）Web UI 插件：在每一条 AI 回复下方显示**这一轮花了多少钱**，在输入框下方显示**本会话累计**，在会话页头提供**跨对话额度汇总**（按模型/按天）。
+DeepSeek Harness（dsh）Web UI 插件：显示**这个对话用的是哪个模型、烧掉订阅额度的多少比例、还剩多少**（Kimi/阿里 Token Plan 窗口读数）；另保留轮级/会话级/跨对话的 token 账与金额估算（金额默认隐藏，可配置开启）。
 
-A [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (dsh) web plugin that shows **how much conversation really cost** — per turn under every assistant reply, per session beside the shipped stats line, and across all sessions in a summary panel. Ships the [official DeepSeek CNY peak/off-peak rates](https://api-docs.deepseek.com/quick_start/pricing/) and accepts your own rate table.
+A [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (dsh) web plugin that shows **which model a conversation actually used and how much of your subscription quota windows it burned — and how much is left** (Kimi coding subscription / Alibaba Token Plan), plus per-turn / per-session / cross-session token accounting with optional cost estimates (hidden by default since 0.3.0). Ships the [official DeepSeek CNY peak/off-peak rates](https://api-docs.deepseek.com/quick_start/pricing/) and accepts your own rate table.
 
-> 本轮 ¥0.23 · 1.2万 token · 缓存读 98% ／ 本会话 ¥15.42 · 3280万 token · 缓存读 99%
+> k3-256k · 本会话 12.3万 token · 缓存读 97% · 5h 窗口 本会话 12 次 ≈12% · 还剩 88
 
-- **人民币计价**，内置 [DeepSeek 官方定价](https://api-docs.deepseek.com/zh-cn/quick_start/pricing/)（工作日高峰为 9:00–12:00、14:00–18:00 北京时间；2026-08-23 起周六、周日全天按空闲价；跨时段的一轮按各步实际发生时间分别计价）
-- **自定义费率表**：任意模型可配单价（含缓存写），订阅制模型（包月/额度套餐）按 0 价登记只显 token——见下文「自定义费率表」
+- **订阅额度窗口（0.3.0）**：Kimi 订阅走官方 `GET /coding/v1/usages` 端点读 5 小时/7 天窗口的已用/上限/剩余/重置时间与加油包余额；阿里 Token Plan 走官方 `bl usage token-plan` CLI——见下文「订阅额度窗口」
+- **单对话占比**：会话读数条显示「本会话在 5h 窗口发起 N 次 ≈ 占窗口 X%」（配额单位=请求数；仅 DSH 发起的调用可归因）
+- **人民币计价（默认隐藏）**，内置 [DeepSeek 官方定价](https://api-docs.deepseek.com/zh-cn/quick_start/pricing/)（峰谷按北京时间）；费率表 `display.showCost: true` 恢复
+- **自定义费率表**：任意模型可配单价（含缓存写），订阅制模型按 0 价登记只显 token
 - 金额基于 **provider 上报的真实 usage**（未缓存输入 / 缓存读 / 输出分桶计费），不是估算 token 数
 - 一条用户消息引发的整轮（含中间工具步骤）合并计为一轮，绝不重复计
 - 打开旧会话时，历史每一轮同样显示；会话级与汇总视图覆盖全部历史会话
@@ -28,11 +30,29 @@ A [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (dsh) web 
 本会话 ¥15.42 · 3280万 token · 缓存读 99%
 ```
 
-③ 会话页头动作行出现「额度汇总」按钮，点开面板看全部会话的合计、按模型分组、按天分组（近 14 天）。
+③ 会话页头动作行出现「额度汇总」按钮，点开面板看**订阅额度窗口**（Kimi 5h/7 天/加油包、阿里 Token Plan 7 天限额）与全部会话的合计、按模型分组、按天分组（近 14 天）。
 
-- 金额精确到分，不足半分显示 `<¥0.01`
+- 金额精确到分，不足半分显示 `<¥0.01`（0.3.0 起默认隐藏）
 - token 数为总消耗（万为单位），口径与 dsh 官方统计条逐桶一致
 - 缓存读占比 = 缓存命中 token ÷（缓存命中 + 未命中输入），一眼看出长对话的省钱效果
+
+## 订阅额度窗口（0.3.0）
+
+在费率表 JSON 里加 `quota` 块（键 = DSH 的 provider 路由名）：
+
+```json
+"quota": {
+  "kimi-coding": { "kind": "kimi-usages" },
+  "qwen-token-plan-cn": { "kind": "aliyun-bl" }
+}
+```
+
+- **kimi-usages**：调 `GET https://api.kimi.com/coding/v1/usages`（Kimi Code 官方端点），凭据默认从 `<dsh-home>/.credentials.yaml` 的 `KIMI_CODING_API_KEY` 内存解析（可用 `credentialRef` 换引用名，`baseUrl` 换端点）；返回 5 小时/7 天窗口 + 加油包，host 端 60 秒 TTL 缓存
+- **aliyun-bl**：调官方百炼 CLI `bl usage token-plan --output json`（先 `npm i -g bailian-cli` 并完成控制台登录；可用 `command` 改可执行名）。未安装/未登录/输出不认得都安静降级为「暂读不到」
+- **占比口径**：Kimi 窗口按**请求数**计；「本会话占比」= 该对话日志里落在当前窗口内的 LLM 调用数 ÷ 窗口上限（只覆盖 DSH 发起的调用；Kimi CLI/桌面端消耗同一池子但无法归因到对话——「还剩多少」以端点实时读数为准，天然包含它们）
+- 阿里 Token Plan 以动态 Credits 计量且官方未公开系数表，**不做单对话占比**（不编造），只显示窗口「已用/还剩」
+
+平台读数失败的窗口在面板上显示「暂读不到（原因）」，永不阻塞界面。
 
 ## 原理
 
@@ -73,12 +93,12 @@ A [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (dsh) web 
 
 ## 隐私
 
-**完全本地，零网络，零上报。**
+**只读本机数据；唯一的网络出站是机主自己配置的官方额度读数端点。**
 
-- 不调用任何 API、不需要也不会读取任何 API 密钥
-- 只读本机 dsh 自己的会话日志文件与本机费率表 JSON
-- 不向任何服务器发送任何数据（内置价表随包分发，自定义费率表也只存在你自己的磁盘上）
-- 界面上的金额是**估计值**（provider 上报 token 数 × 费率表单价），仅供个人参考，不构成账单；订阅制套餐的实际额度消耗以平台官方页面为准
+- token 账与金额来自本机 dsh 会话日志与本机费率表 JSON，不出本机
+- 0.3.0 起若配置 `quota` 块：Kimi 路由会向 `api.kimi.com`（或你自配的 baseUrl）发只读 `GET /usages`；阿里路由由本机官方 `bl` CLI 与其控制台会话通信——除此之外无任何网络访问、无任何上报
+- 订阅 API 密钥只在内存里从 dsh 自己的受管凭据库（`.credentials.yaml`）解析后用于上述请求，**不打印、不落盘、不转发给任何第三方**
+- 界面上的金额是**估计值**（provider 上报 token 数 × 费率表单价），仅供个人参考，不构成账单；订阅套餐的实际额度以平台官方读数为准
 
 ## 计费口径与边界
 

@@ -91,7 +91,7 @@
 
 ### 状态
 
-门一已确认（tool-library 立项「DSH 对话额度表」，门一/门二均机主拍板 2026-08-24；判级 A→C，实施以本变更记录为准，立项档案见 tool-library `docs/方案-DSH对话额度表.md`）；实施完成；K3 双层复检通过（机器验 0 FAIL + codex 独立模型审第 2 轮「通过」）；启动事故经变更记录 #4 修复后，端点级实测通过（见下「验证与 K3 复检」末节）；待门三。
+门一已确认（tool-library 立项「DSH 对话额度表」，门一/门二均机主拍板 2026-08-24；判级 A→C，实施以本变更记录为准，立项档案见 tool-library `docs/方案-DSH对话额度表.md`）；实施完成；K3 双层复检通过（机器验 0 FAIL + codex 独立模型审第 2 轮「通过」）；启动事故经变更记录 #4 修复后，端点级实测通过（见下「验证与 K3 复检」末节）；**门三未通过（2026-08-24 机主拍板：所得非所需，流程问题待复盘；0.2.0 停留本地提交未推送未发布，后续处置待重新对齐）**。
 
 ### 需求
 
@@ -179,3 +179,47 @@
 ### 门禁
 
 B 轻流程（改 bug），机主一句话对齐后修复+复检；本记录按 C 口径落盘。变更记录 #3 的验收 3 已于修复后完成端点级实测（见 #3「验证与 K3 复检」末节），像素面随门三由机主目检确认。
+
+## 变更记录 #5（2026-08-24，0.3.0：订阅额度窗口——需求 v2）
+
+### 背景
+
+变更记录 #3 的交付在 tool-library 立项门三被机主**拍回**（「得到的东西不是我想要的」）。机主重述需求（v2 原话）：「是该对话是哪个模型，就显示这个模型，当前 harness 预设的不变，kimi 和 Qwen 咱们找到方式计算出此次对话使用了多少比例的额度，还剩多少」。调研与拍板记录全部在 tool-library `docs/方案-DSH对话额度表.md` §七/§八/§九（本仓库不重复建档）。
+
+### 门二（v2）拍板（2026-08-24，五项全拍）
+
+阿里取数走**官方 bl CLI**；阿里**不做**单对话占比（不编造 Credits）；DeepSeek 余额**不做**；金额**默认隐藏可配置**（`display.showCost`）；Kimi **读数行显 5h、汇总面板显全部**（5h/7 天/加油包）。
+
+### 基线
+
+- 基线提交：`8723e90`（docs: 变更记录#3 端点级实测落盘）；工作区干净；`node --test` 22/22。
+
+### 方案
+
+- `lib/fold.js`：`requestsInWindow(samples, provider, startMs, endMs)`（窗口内按 provider 计请求数，垃圾输入归 0 不抛）；`quotaConfigOf(parsed)`（费率表新增 `display`/`quota` 顶层块的解析与守卫：showCost 必须布尔、kind 白名单、credentialRef 语法、baseUrl 限 https、`__proto__`/`constructor`/`prototype` 键拒绝）。
+- `lib/index.js`：`loadPluginFile` 取代 `loadRates`（费率 + display + quota 同文件）；`resolveCredentialValue`（`.credentials.yaml` 的 refs 块行解析，值只在内存）；`fetchKimiQuota`（`GET {baseUrl}/usages`，默认 `https://api.kimi.com/coding/v1` + ref `KIMI_CODING_API_KEY`，8s 超时）；`fetchAliyunQuota`（`bl usage token-plan --output json` 子进程，20s 超时，ENOENT/非 JSON/字段不认得三档降级）；`quotaForRoute` TTL 缓存（成功 60s/失败 10s）；新端点 `turnCost/quota`（装饰器块照旧照抄）；`maskCost`——`display.showCost` 为 false 时 query/sessionTotals/summary 的 cost 一律置 null（host 侧藏，任何 client 拿不到）；summary 响应增 `showCost` 字段。
+- `lib/client.js`：读数条前缀**模型名**（读自对话日志）+ Kimi 路由会话追加「5h 窗口 本会话 N 次 ≈X% · 还剩 M」；汇总面板新增「订阅额度窗口」区（Kimi 窗口/加油包、阿里 Credits 行、bl 未装提示）；showCost=false 时表格隐藏金额列、合计行走 tokens-only 键；locale zh/en 键集合同步扩到 33 键。
+- `rates.example.json`/README/CHANGELOG/DEVELOPMENT.md 同步；**README 隐私节改写**：0.3.0 起唯一网络出站是机主自配的官方额度端点（原「零网络」承诺随需求 v2 变更，敏感凭据仍永不落盘打印）。
+- 版本 0.2.0 → 0.3.0（minor：新增能力 + 默认行为变化有配置开关）。
+
+### 验证
+
+- `node --test`：26/26（基线 22 原样通过 + 新增 4 项：窗口归因边界/垃圾输入、quota 配置解析、原型名守卫）。
+- `node --check`：三个 lib 文件全过；client 无头冒烟 v2（stub react/ctx：三槽位、locale 键集合相等、投影回退渲染 1700 tokens、零用量空渲染、quota 文案键全存在）。
+- 部署副本（profile）与源码 diff 归零；机主费率表已加 `display`/`quota` 块（kimi-usages + aliyun-bl）。
+- Kimi usages 端点在调研阶段已实测 HTTP 200（周窗口 29/100、5h 36/100、加油包 ¥28.79，与 8-22 快照互洽）；**端点级实测待 dsh web 重启窗口**（host 端改动需重启）。
+- **K3 独立模型审第 1 轮（codex 0.146.0，只读沙箱）**：结论「需修改」3 项 + 3 条非阻塞：
+  1. 轮级徽章在金额隐藏时整条消失（`cost !== number` 即 return）→ 改为仅 `result === null` 返回、`cost > 0` 分流，cost 为 null 走 tokens-only ✅（附冒烟 RPC 用例）
+  2. `command` 无字符集校验 + `shell:true` 注入面 → `quotaConfigOf` 加白名单 `^[A-Za-z0-9_.:\\/ -]+$`（拒 shell 元字符），不合规只丢 command、路由保留 ✅（附 evil-cmd 单测）
+  3. `requestsInWindow` 非迭代输入会抛 TypeError → 前置 `Array.isArray` 守卫 ✅（附 number/string/普通对象 三条单测）
+  非阻塞：formatClock 跨天带日期（M-D HH:mm）、文档 42 键订正 33 键，均顺手落地。
+- **K3 独立模型审第 2 轮（codex，只读沙箱静态核验）**：结论「**通过**」——三处修复正确落地、无新回归；两条非阻断观察（本 K3 段落留痕、command 白名单允许 `bl --flag` 单命令带参无注入面）。
+
+### 回滚
+
+- 代码：回退本提交恢复 0.2.0 行为；费率表的 display/quota 块在 0.2.0 下被忽略，无数据迁移。
+- 部署：profile 目录降版 + 重启 dsh web。
+
+### 门禁
+
+门一（v1）/门二（v1）/门一重拍（v2）/门二（v2）均已拍板；待门三。机主配合项：①重启 dsh web（host 端 quota 端点生效）；②阿里侧 `npm i -g bailian-cli` 并完成控制台登录（不装则阿里区安静降级为「暂读不到」）。推送与 npm 发布待机主指令。

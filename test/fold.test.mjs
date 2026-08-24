@@ -20,6 +20,9 @@ import {
   listSessions,
   isValidSessionId,
   findSessionFile,
+  requestsInWindow,
+  quotaConfigOf,
+  QUOTA_KINDS,
 } from "../lib/fold.js";
 import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -267,4 +270,71 @@ test("listSessions: enumerates <root>/<workspace>/<sessionId>/session.jsonl.zstd
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+});
+
+// ── quota (v2 / 0.3.0) ──────────────────────────────────────────────────────
+
+test("requestsInWindow: counts one provider's samples inside [start, end)", () => {
+  const samples = [
+    { provider: "kimi-coding", time: 1000, turn: 1, step: 1 },
+    { provider: "kimi-coding", time: 2000, turn: 1, step: 2 },
+    { provider: "kimi-coding", time: 3000, turn: 2, step: 1 },
+    { provider: "qwen-token-plan-cn", time: 1500, turn: 1, step: 3 },
+    { provider: "kimi-coding", turn: 9, step: 9 },           // no time — never matches
+    { time: 2500, turn: 3, step: 1 },                        // no provider — never matches
+  ];
+  assert.equal(requestsInWindow(samples, "kimi-coding", 0, 4000), 3);
+  assert.equal(requestsInWindow(samples, "kimi-coding", 1000, 3000), 2); // end exclusive
+  assert.equal(requestsInWindow(samples, "kimi-coding", 2001, 4000), 1);
+  assert.equal(requestsInWindow(samples, "qwen-token-plan-cn", 0, 4000), 1);
+  assert.equal(requestsInWindow(samples, "deepseek-official", 0, 4000), 0);
+});
+
+test("requestsInWindow: garbage inputs degrade to 0, never throw", () => {
+  assert.equal(requestsInWindow(undefined, "kimi-coding", 0, 1), 0);
+  assert.equal(requestsInWindow(null, "kimi-coding", 0, 1), 0);
+  assert.equal(requestsInWindow([], "", 0, 1), 0);
+  assert.equal(requestsInWindow([], "kimi-coding", Number.NaN, 1), 0);
+  assert.equal(requestsInWindow([], "kimi-coding", 100, 100), 0);   // empty window
+  assert.equal(requestsInWindow([], "kimi-coding", 100, 50), 0);   // inverted window
+  assert.equal(requestsInWindow([], "kimi-coding", 0, Number.POSITIVE_INFINITY), 0);
+  // non-iterable samples must not throw (K3 复检第 3 条)
+  assert.equal(requestsInWindow(7, "kimi-coding", 0, 1), 0);
+  assert.equal(requestsInWindow("kimi-coding", "kimi-coding", 0, 1), 0);
+  assert.equal(requestsInWindow({ 0: { provider: "kimi-coding" } }, "kimi-coding", 0, 1), 0);
+});
+
+test("quotaConfigOf: display defaults to cost hidden; quota routes validated", () => {
+  // Absent blocks → defaults (门二 v2: 金额默认隐藏).
+  assert.deepEqual(quotaConfigOf({ version: 1, models: {} }), { display: { showCost: false }, quota: {} });
+  assert.deepEqual(quotaConfigOf(null), { display: { showCost: false }, quota: {} });
+  assert.deepEqual(quotaConfigOf("junk"), { display: { showCost: false }, quota: {} });
+  const { display, quota } = quotaConfigOf({
+    display: { showCost: true },
+    quota: {
+      "kimi-coding": { kind: "kimi-usages", credentialRef: "KIMI_CODING_API_KEY", baseUrl: "https://api.kimi.com/coding/v1" },
+      "qwen-token-plan-cn": { kind: "aliyun-bl", command: "bl" },
+      "bad-kind": { kind: "nonsense" },            // unknown kind — skipped
+      "not-object": "nope",                        // malformed — skipped
+      "bad-ref": { kind: "kimi-usages", credentialRef: "lower case" }, // ref grammar enforced
+      "http-base": { kind: "kimi-usages", baseUrl: "http://insecure.example" }, // https only
+      "evil-cmd": { kind: "aliyun-bl", command: "bl && echo pwned" },  // shell metacharacters rejected
+    },
+  });
+  assert.equal(display.showCost, true);
+  assert.deepEqual(quota["kimi-coding"], { kind: "kimi-usages", credentialRef: "KIMI_CODING_API_KEY", baseUrl: "https://api.kimi.com/coding/v1" });
+  assert.deepEqual(quota["qwen-token-plan-cn"], { kind: "aliyun-bl", command: "bl" });
+  assert.equal(Object.hasOwn(quota, "bad-kind"), false);
+  assert.equal(Object.hasOwn(quota, "not-object"), false);
+  assert.deepEqual(quota["bad-ref"], { kind: "kimi-usages" });
+  assert.deepEqual(quota["http-base"], { kind: "kimi-usages" });
+  assert.deepEqual(quota["evil-cmd"], { kind: "aliyun-bl" }); // command dropped, route kept
+  assert.ok(QUOTA_KINDS.has("kimi-usages") && QUOTA_KINDS.has("aliyun-bl"));
+});
+
+test("quotaConfigOf: prototype-name keys and non-boolean showCost never leak", () => {
+  const parsed = JSON.parse(`{"display":{"showCost":"yes"},"quota":{"__proto__":{"kind":"kimi-usages"},"constructor":{"kind":"aliyun-bl"}}}`);
+  const { display, quota } = quotaConfigOf(parsed);
+  assert.equal(display.showCost, false);
+  assert.deepEqual(Object.keys(quota), []);
 });

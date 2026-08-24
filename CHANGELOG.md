@@ -4,6 +4,23 @@
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-08-24
+
+### Added
+
+- **订阅额度窗口显示（门二 v2 五拍落地）**：新端点 `turnCost/quota`——Kimi 订阅路由经官方 `GET {baseUrl}/usages` 读 5 小时/7 天窗口的 used/limit/remaining/resetTime 与加油包余额（实测 200，凭据内存解析自 `.credentials.yaml`，永不落盘打印）；阿里 Token Plan 路由调官方 `bl usage token-plan --output json`（未装/未登录/输出不认得均安静降级）
+- **单对话额度占比（仅 Kimi 侧）**：会话读数条追加「5h 窗口 本会话 N 次 ≈X% · 还剩 M」——配额单位是请求数，本地按窗口时间归集该对话的 LLM 调用数（fold.js 新 `requestsInWindow`）；阿里侧按门二拍板**不做**单对话占比（Credits 精确归因不可得，不编造）
+- **模型名随对话显示**：会话读数条前缀模型名（读自对话日志，不跟当前 harness 预设）
+- 费率表新增可选 `display.showCost` 与 `quota` 两个顶层块（`quotaConfigOf` 解析，畸形/原型名键守卫）；汇总面板新增「订阅额度窗口」区
+
+### Changed
+
+- **金额默认隐藏**（门二 v2 拍板）：`display.showCost` 缺省 false 时，host 端三个金额端点的 `cost` 一律置 null，GUI 只显 token；费率表改 `showCost: true` 恢复
+
+### Fixed
+
+- host 端 `Config` 的 zod 语法误用（`z.string().optional()`）在 0.2.0 部署后拖崩 dsh web 启动——schemastery 无此方法，对象字段缺省即可选（变更记录 #4，0.2.0 本机热修，0.3.0 起含在正式码线）
+
 ## [0.2.0] - 2026-08-24
 
 ### Added

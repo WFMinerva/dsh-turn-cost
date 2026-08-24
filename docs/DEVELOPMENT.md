@@ -119,6 +119,10 @@ node --test              # 纯函数单测，秒级（默认 glob 自动匹配 t
 14. **为什么汇总按会话粒度签名缓存，而不是整表一个签名？** 150+ 会话全量解压只有首次贵；`summaryCache` 以 `sessionId → size:mtime|live事件数` 为签名，重复打开汇总面板只重算变化过的会话。
 15. **为什么会话级读数条挂 `conversation.composer.dock`？** 官方注释明确该 list 槽位就是统计条所在的环境读数带（"the shipped stats line lives here"），并列共存不替换；`conversation.chat.turnTail` 照旧禁用。
 16. **为什么读数条的 token 口径可以直接对比官方统计条？** 官方 `tokenUsage` 投影的 `uncachedInputTokens` 就是 provider 上报的 `usage.inputTokens`（dsh-client-connection `tokenUsageOf` 实现），与 fold.js 的 `inputTokens` 桶同源；0.2.0 实测 5 个真实会话逐桶 MATCH。
+17. **为什么「还剩多少」读平台端点、「本对话占比」读本地日志？**（0.3.0，门二 v2）Kimi 配额单位是**请求数**：对话占比 = 本地日志里落在当前窗口的调用数 ÷ 窗口上限；但剩余必须取平台实时值——同一池子还被 Kimi CLI/桌面端消耗，本地日志看不见它们。端点成功 60s TTL 缓存、失败 10s 防打爆。
+18. **为什么阿里 Token Plan 不做单对话占比？** Credits 按模型分档动态抵扣（思考模式/工具调用影响），官方无公开系数表、明说「以控制台为准」，且实测 qwen 路由日志 usage 只有 token 四桶、无 Credits 字段——精确归因不可得，门二 v2 拍板不做（不编造），只显示窗口已用/剩余。
+19. **为什么凭据从 `.credentials.yaml` 行解析，而不是 inject dsh-credentials 服务？** 该 seam 是 provider 抽象（`CredentialProvider.resolve`），没有暴露给第三方插件的公共解析服务；`.credentials.yaml` 是 dsh-home 内受管文件、host 插件本就有读权限；行解析器只认 `refs:` 块的 `NAME: value`（`^[A-Z][A-Z0-9_]*$`），值只在内存用于额度请求，永不打印落盘。
+20. **为什么金额改成默认隐藏而不是拆除？** 门二 v2 拍板「默认隐藏可配置」：费率表 `display.showCost: true` 即恢复；host 端 `maskCost` 把 cost 置 null，而不是 client 端藏——任何 client 都拿不到数字。
 
 ## 七、0.2.0 新增件的维护要点
 
@@ -128,3 +132,4 @@ node --test              # 纯函数单测，秒级（默认 glob 自动匹配 t
 - **单测里的临时目录**：Windows 上首次 `mkdtemp`+写删可能触发杀软扫描（首跑 ~36s，之后 <100ms），属环境噪声不是回归。
 - **host 端改动需重启 dsh web 生效**（web profile 禁用 host 插件 HMR）；client bundle（client.js）覆盖到 profile 后由常驻 HMR 热更新（rev 变化触发，React 状态不保留）。
 - **Config/schema 只能用 schemastery 语法**：`z` 是 `@deepseek-ai/schemastery` 不是 zod——对象字段缺省即可选，**没有 `.optional()`/`.nullable()`/`.parse()` 这些 zod 链式方法**；误用会在插件 import 阶段静态初始化器抛错，cordis 整树拒载、**dsh web 启动直接崩**（2026-08-24 实锤，见方案文档变更记录 #4）。改 Config 后必须真实启动一次 dsh web 验证——单测覆盖不到 host 侧。
+- **quota 端点（0.3.0）**：`turnCost/quota` 平台读数 TTL 缓存（成功 60s / 失败 10s）；`normalizeAliyunBl` 在 bl CLI 真实输出未实锤前接受多种键名拼写（total/TotalValue、remaining/TotalSurplusValue…），全不认得就降级 `bl-output-unrecognized` 并带 300 字符 raw 摘录；Kimi `usages` 响应的加油包金额单位是 1e-8 CNY、月度是 cents（已与 2026-08-22 快照交叉验证：¥28.79/¥871.21/¥1000）。

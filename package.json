@@ -1,7 +1,7 @@
 {
   "name": "dsh-turn-cost",
-  "version": "0.2.0",
-  "description": "Per-turn, per-session and cross-session estimated cost (customizable rate table, built-in official DeepSeek CNY rates) shown in the dsh web UI",
+  "version": "0.3.0",
+  "description": "Per-conversation subscription quota share (Kimi/Aliyun Token Plan windows, model names from the log) plus per-turn/session estimated cost — shown in the dsh web UI",
   "type": "module",
   "main": "lib/index.js",
   "exports": {

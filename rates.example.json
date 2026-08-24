@@ -31,5 +31,19 @@
   },
   "aliases": {
     "k3": "k3-256k"
+  },
+  "display": {
+    "showCost": false,
+    "_note": "0.3.0 起金额默认隐藏；改 true 恢复 ¥ 显示"
+  },
+  "quota": {
+    "kimi-coding": {
+      "kind": "kimi-usages",
+      "_note": "Kimi 订阅窗口：GET https://api.kimi.com/coding/v1/usages；凭据默认取 .credentials.yaml 的 KIMI_CODING_API_KEY，可用 credentialRef 改名"
+    },
+    "qwen-token-plan-cn": {
+      "kind": "aliyun-bl",
+      "_note": "阿里 Token Plan：调官方 bl CLI（npm i -g bailian-cli 并登录）；可用 command 改可执行名"
+    }
   }
 }
