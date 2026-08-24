@@ -70,7 +70,7 @@ dsh plugin --profile web add dsh-turn-cost
 | 一轮 | 用户一条消息 → AI 最终回复（中间工具步骤合并） |
 | 计费 | Σ 各步（未缓存输入×单价 + 缓存读×单价 + 输出×单价），跨峰谷按步时点 |
 | 时段 | 北京时间；2026-08-23 起周末全天空闲价，生效前历史调用仍按旧规则 |
-| 模型 | 按 `request/header` 记录的模型取价（内置 Pro / Flash 两档官方 CNY 价） |
+| 模型 | 按 `request/header` 记录的模型取价（内置 Pro / Flash / Flash-Vision 三档官方 CNY 价，Vision 与 Flash 同价） |
 | 不计 | 脚本直连 API 的调用、其它机器的会话、无官方 CNY 价的模型 |
 
 ## 开发与维护

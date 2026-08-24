@@ -84,6 +84,12 @@ test("costOfStep: peak vs off-peak at official CNY rates", () => {
   assert.ok(Math.abs(costOfStep({ ...base, time: atBeijing(2026, 8, 29, 10) }) - 4.5) < 1e-9);
 });
 
+test("costOfStep: deepseek-v4-flash-vision-exp is priced at V4 Flash rates", () => {
+  const base = { model: "deepseek-v4-flash-vision-exp", turn: 1, step: 1, inputTokens: 1e6, cacheReadTokens: 0, outputTokens: 0, cacheWriteTokens: 0 };
+  assert.ok(Math.abs(costOfStep({ ...base, time: T_PEAK }) - 3.0) < 1e-9);
+  assert.ok(Math.abs(costOfStep({ ...base, time: T_OFF_PEAK }) - 1.5) < 1e-9);
+});
+
 test("costOfStep: unknown model or missing time yields null, never a fabricated price", () => {
   assert.equal(costOfStep({ model: "some-unknown-model", time: T_PEAK, turn: 1, step: 1, inputTokens: 1e6 }), null);
   assert.equal(costOfStep({ model: "deepseek-v4-pro", turn: 1, step: 1, inputTokens: 1e6 }), null);
