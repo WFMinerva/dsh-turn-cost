@@ -6,7 +6,7 @@ $script:ReportStatusValues = @('PASS', 'WARN', 'FAIL', 'SKIP')
 
 function Get-JsonPropertySafe($Obj, [string]$Name) {
   if ($null -eq $Obj) { return $null }
-  foreach ($p in $Obj.PSObject.Properties) { if ($p.Name -ceq $Name) { return $p.Value } }
+  foreach ($p in $Obj.PSObject.Properties) { if ($p.Name -ieq $Name) { return $p.Value } }
   return $null
 }
 
