@@ -55,3 +55,31 @@
 - npm：`dsh-turn-cost@0.1.2` 已发布为公共包；公开 registry 核验 `version=0.1.2`、`latest=0.1.2`。
 - 临时 npm 缓存已清理；目标仓库工作区干净并与 `origin/master` 同步。
 - 机主于 2026-08-23 明确回复“确认交付”，门三通过；推送与 npm 发布均已完成。
+
+## 变更记录 #2（2026-08-24）
+
+### 状态
+
+门一已确认；维护实施完成；K3 双层复检通过（机器验 0 FAIL + 独立模型审「通过」）；待门三（推送/发布待机主指令）。
+
+### 需求
+
+- 补充 DeepSeek 新上线的 `deepseek-v4-flash-vision-exp` 视觉模型价目：官方确认其价格与 V4 Flash 完全一致。
+- 修复该模型会话每轮金额显示 0.00（模型不在价目表 → 全部样本 unpriced → cost 恒 0）。
+- 不改变既有 Pro / Flash 单价、峰谷时段、usage 折叠、UI 或发布方式。
+
+### 方案
+
+- `OFFICIAL_CNY` 新增 `deepseek-v4-flash-vision-exp` 条目，peak/offPeak 与 `deepseek-v4-flash` 逐字段一致（input 3.0/1.5、cacheRead 0.1/0.05、output 9.0/4.5）。
+- 新增单测：断言该模型峰/谷输入单价分别为 3.0 / 1.5（钉住「会被计价」）。
+- 版本 0.1.2 → 0.1.3（patch）；CHANGELOG、README 计费口径同步。
+
+### 验证与 K3 复检
+
+- `node --test`：11 项通过、0 项失败（含新增用例）。
+- 真实会话复验：模型 `deepseek-v4-flash-vision-exp` 的每轮由 `priced=0/unpriced=N` 变为 `priced=N/unpriced=0`、金额非 0（turn1=¥0.078 … turn10=¥1.79）。
+- K3 独立模型审：结论「通过」；非阻断提示 3 条——①测试仅覆盖 input 单价的峰/谷，未断言 cacheRead/output；②模型匹配为精确字符串、无别名归一化；③flash/vision 两份独立字面量存在日后调价漂移风险。
+
+### 发布记录
+
+- 待机主「推送 / 发布 npm」指令；提交 `d7f3a28` 已在本地 master（未推送）。
