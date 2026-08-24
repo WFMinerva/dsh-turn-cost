@@ -262,3 +262,111 @@ B 轻流程（改 bug），机主一句话对齐后修复+复检；本记录按 
 ### 门禁
 
 机主对金额/额度口径已逐项拍板（本节「机主重述」）；端点级实测三条路由全通；待机主 GUI 目检收尾门三。推送与 npm 发布仍待机主指令。
+
+## 变更记录 #7（2026-08-24，Config 启动崩溃防回归维护；已实施，门三阻断）
+
+### 需求对齐（门一，2026-08-24）
+
+- **问题**：变更记录 #4 的 `Config` 误用 zod 链式语法，导致插件在 import 阶段崩溃并拖垮整个 dsh web 启动；应急修复已落地，但报告明确指出 host 侧测试和静态防线缺失。
+- **目标**：把这次事故转化为可执行的防回归门禁，降低同类 schema/API 误用再次进入发布包的概率；“以后不会发生”按多层检测和发布前真实启动验收落实，不作绝对保证。
+- **验证范围**：机主陈述单位 DSH 已新增 Qwen、Kimi 模型。本次不重新设计两条路由，而是把 DeepSeek 按量、Kimi 订阅、Qwen Token Plan 三类路由纳入兼容性矩阵；不得把机主陈述写成已由本机验证的事实。
+- **不做**：不改变现有金额/额度口径，不新增全局金额开关，不修改单位 DSH 的模型配置，不推送 GitHub，不发布 npm。
+
+### 基线与已确认事实
+
+- 门一基线提交：`77481b1`（`docs: 变更记录#6 端点级实测落盘——三路由全通`）；该提交时工作区干净，当前分支 `master` 与 `origin/master` 同步。
+- 门一基线时，嵌套仓库工作区仅有本方案文档的未提交 #7 草稿；本轮不把该草稿当作代码、CI 或依赖已实施。
+- 门一基线时没有 `node_modules`、`package-lock.json` 或其他 lockfile。`package.json` 只有 `peerDependencies`，其中包括 `@deepseek-ai/schemastery`；没有 `dependencies` 或 `devDependencies`。
+- 门一基线时 `.github/workflows/test.yml` 只执行 `node --test`；现有 26 项测试没有导入 host 端 `lib/index.js`，也没有 Config 上下文静态规则。
+- 现有源码在 `lib/client.js` 与 `lib/index.js` 使用合法的 `Date.parse`。因此对 `.parse()` 的全库 grep 会误报，不能作为本维护的静态防线。
+- **单位环境边界**：本轮未进入单位 DSH 运行态，也未验证 Qwen/Kimi 的模型可用性、路由或额度读数；这些状态当前只能记为机主陈述，不能记为本机验收通过。
+
+### 调研与方案（门二已拍板；实施落点）
+
+1. **运行时依赖按 Harness 官方规范落点**
+   - `@deepseek-ai/schemastery` 被 `lib/index.js` 直接 import 并在运行时构造 `Config`，已从 `peerDependencies` 移到 `dependencies`（保留当前兼容版本范围，以锁文件固化）。不能用全局安装、测试 mock 或未声明依赖掩盖运行时缺口。
+   - 仍由 DSH 宿主提供的 peer 依赖继续保留在 `peerDependencies`：`@deepseek-ai/cordis`、`@deepseek-ai/dsh-home-paths`、`@deepseek-ai/dsh-typert-protocol`；三项均以相同版本范围镜像到 `devDependencies`，供 CI 的真实 host import 使用。不得只把 Schemastery 放进 devDependencies。
+   - **依赖分层必须有机器门禁**：新增 `test/package-manifest-contract.test.mjs`，直接读取 `package.json`，不依赖 `node_modules`，断言 `@deepseek-ai/schemastery` 只存在于 `dependencies`（不得同时出现在 `peerDependencies`、`devDependencies` 或 `optionalDependencies`）；断言 `@deepseek-ai/cordis`、`@deepseek-ai/dsh-home-paths`、`@deepseek-ai/dsh-typert-protocol` 继续存在于 `peerDependencies`，且各自的 `devDependencies` 字符串与 peer 范围逐字相同，并且不落入 `dependencies`/`optionalDependencies`。该契约测试必须在 CI 执行；仅做 host import 不足以发现未来把依赖放错位置，因为测试环境仍可能恰好安装到它。
+
+2. **有明确版本口径的可重现 CI 安装与 host 校验**
+   - CI Node 主版本固定为 **24**，实际 workflow 钉到 `v24.18.0`；lockfile 由 npm `11.16.0` 生成，`package.json` 的 `packageManager` 与 `docs/DEVELOPMENT.md` 已同步记录。Node/npm 精确版本与 lockfile 均已落盘，因此依赖安装口径达到本方案要求的可重现边界。
+   - 已生成 `package-lock.json`（lockfileVersion 3）；CI 不使用项目级 `npm install` 或漂移安装，只执行锁定命令 `npm ci --ignore-scripts --no-audit --no-fund`。
+   - GitHub Actions 已固定顺序：checkout → setup Node `24.18.0` → `npm ci --ignore-scripts --no-audit --no-fund` → package manifest contract → 真实 host import/Config 冒烟 → 静态规则与全量测试。该命令仍会因 `package.json` 与 lockfile 不一致而失败，不能通过删锁文件或改用宽松安装绕过；本地验证必须执行同一条命令。
+   - host 冒烟必须直接 import `lib/index.js`，使用安装后的真实 `@deepseek-ai/schemastery` 与三项 DSH devDependency，不得注入伪造的 schemastery API。CI 的 host 冒烟通过不等于真实 dsh web 已启动。
+
+3. **把“错误配置值校验”和“错误源码 API 拦截”拆成两类测试**
+   - **运行时 Config 值语义（host 冒烟）**：单独的 `test/host-config.test.mjs` 直接验证 `TurnCostService` 可导入、`TurnCostService.Config` 可定义；`{}` 与 `{ ratesPath: "x" }` 应通过，`{ ratesPath: 1 }` 等错误类型应明确拒绝。该测试回答“配置值是否合法”，不负责扫描源码文本；它也不能替代上一项 manifest contract。
+   - **Schemastery/Config 源码 API 规则（静态检查）**：单独的规则测试只在识别到 `@deepseek-ai/schemastery` 绑定及 `static Config = z.object(...)` 的 Config 区间后检查 zod 专属链式调用 `.optional()`、`.nullable()`、`.parse()`、`.safeParse()`；不能对全仓库或所有 `.parse(` 做禁用 grep。规则无法确定 Config 区间时应报规则错误，不得静默放宽范围。
+   - **正反夹具**：至少提交一份合法 Config 正例（同时包含 Config 外合法的 `Date.parse(...)`，应通过）和一份 Config 内含 `z.string().optional()` 的反例（应失败）；对 `.nullable()`、`.parse()`、`.safeParse()` 的拦截分别保留可诊断的失败用例。运行时值测试失败与源码 API 规则失败必须有不同测试名称和错误信息，互不替代。
+
+4. **脱敏三路由固定夹具**
+   - 使用不含密钥、账号、原始日志、工作区路径和平台响应敏感字段的固定会话/事件夹具，覆盖 canonical provider id `deepseek-official`、`kimi-coding`、`qwen-token-plan-cn`，并单独覆盖历史兼容 id `qwen-token-plan`。
+   - 夹具必须证明模型名来自会话日志而不是当前 harness 预设；执行 Kimi `usages` 规范化（含 5h/remaining）、Qwen `bl` 百分比规范化（含 `remainingPercent`），验证 DeepSeek 金额、Kimi 订阅读数分支、Qwen 剩余比例分支及额度端点失败时的安静降级。`quotaForRoute` 单路由调用异常必须收敛为 `ok:false`，同一次 `quota()` 中另一条路由仍须返回；任一路由数据异常只影响该路由/该读数，不能把 host 插件树启动拖崩。
+   - client 分支必须由可执行 seam 证明：装载真实 `lib/client.js` bundle、捕获实际 assistant badge slot 并渲染 `kimi-coding`、`qwen-token-plan-cn`、历史 `qwen-token-plan` 三个 provider id；不得只 grep 源码字符串。额度纯规范化函数如需测试接缝，只能放在未列入 package exports 的内部模块，保持公开 API 与业务语义不变。
+   - 夹具层零网络、零凭据、零真实 DSH 依赖；它证明业务分流与降级，不冒充单位环境的真实路由或额度验收。
+
+### 三层验证边界（不互相替代）
+
+| 层级 | 环境与输入 | 必须证明 | 明确不能证明 |
+|---|---|---|---|
+| 1. Config 冒烟 | CI/local 的锁定依赖；真实 import；无网络、无凭据 | host 入口能 import，Schemastery `Config` 能定义，合法/错误配置值语义正确 | 三路由业务分流、真实 dsh web 插件树、单位模型可用性 |
+| 2. 脱敏三路由夹具 | 固定脱敏会话/事件；无网络、无凭据、无真实 DSH | 模型取值、provider 分流、旧 Qwen id 兼容、单路由失败降级 | 真实平台额度、真实配置文件、真实 DSH 启动 |
+| 3. 单位 DSH 真实启动 | 机主授权后的单位 DSH 实机、实际 profile 与启动入口 | **发布前必验**：真实插件树完成加载并监听；启动后可干净停止且无残留；如另做路由实测，结果只写脱敏证据 | CI 或夹具不能替代；若未获授权或单位环境不可用，则门三阻断、保持未交付，不能以“未验证”收尾；本轮尚无 Qwen/Kimi 实机通过证据 |
+
+### 实施范围与文档
+
+- 已涉及：`package.json`、`package-lock.json`、`.github/workflows/test.yml`、`lib/index.js`、内部额度规范化模块 `lib/quota.js`、`test/package-manifest-contract.test.mjs`、`test/host-config.test.mjs`、`test/config-source-rule.test.mjs` 及正反夹具、`test/route-fixtures.test.mjs`、真实 client seam `test/client-quota.test.mjs`、`docs/DEVELOPMENT.md`、`.gitignore`。
+- `docs/DEVELOPMENT.md` 已补充依赖落点、精确 `npm ci --ignore-scripts --no-audit --no-fund`/host 冒烟调用方式、manifest contract、Config API 禁用范围、三层验证边界、CI Node 24.18.0 与 npm 11.16.0 记录、单位 DSH 脱敏记录模板和回滚步骤。
+- 单位 profile、模型配置、凭据、真实日志和部署副本不纳入仓库变更；真实启动只在机主明确授权后进行。
+
+### 验收标准
+
+- `@deepseek-ai/schemastery` 位于 `dependencies`；其余三项 DSH peer 仍在 `peerDependencies` 且同范围出现在 `devDependencies`；`package-lock.json` 与 `package.json` 一致。
+- manifest contract 机器测试对上述依赖位置和逐字版本范围断言通过；CI 与本地均以完全相同的 `npm ci --ignore-scripts --no-audit --no-fund` 安装，显式执行真实 host import/Config 冒烟；`{}`/字符串配置通过，错误配置值拒绝；不得用 mock 结果代替。GitHub Actions 本身未在本轮远程实跑，不宣称 CI 已通过。
+- CI 使用 Node `24.18.0`；lockfile 生成所用 npm `11.16.0` 已记录在 `packageManager` 与开发文档，不能改回只固定主版本或范围。
+- 静态规则对 Config 内违规 Schemastery API 稳定失败，对合法 Config 与 Config 外 `Date.parse` 稳定通过；正反夹具均在 CI 执行。
+- 脱敏夹具覆盖三种 canonical 路由和历史 Qwen id，模型来自日志；Kimi 5h/remaining、Qwen `remainingPercent`、`quotaForRoute` 单路由异常隔离均由真实执行的断言覆盖；真实 client bundle seam 证明三个 provider id 选择正确的展示数据，单路由失败安静降级且不阻断 host 启动路径。
+- **发布前必验**：门三前由机主授权完成一次单位 DSH 真实启动验收：插件树加载、监听、干净停止、无残留；若未获授权或单位环境不可用，门三阻断、保持未交付，不能只记录“未验证”后继续交付，也不得用 CI/夹具填充为通过。Qwen/Kimi 的真实状态在此之前仍是机主陈述。
+- 实施后必须运行 `node --test`、语法检查、CI、`git diff --check` 与仓库要求的 `python tools/checks.py --json`；机器验 0 FAIL 后才进入独立模型 K3 复检。单位 DSH 真实启动仍是门三硬门。
+
+### 实施（门二已拍板，2026-08-24）
+
+- `package.json`：`@deepseek-ai/schemastery` 移入 `dependencies`；`@deepseek-ai/cordis`、`@deepseek-ai/dsh-home-paths`、`@deepseek-ai/dsh-typert-protocol` 保留在 `peerDependencies`，并以逐字相同范围镜像到 `devDependencies`；记录 `packageManager: npm@11.16.0`。
+- 新增 `package-lock.json`（lockfileVersion 3），由 Node `v24.18.0` / npm `11.16.0` 生成；GitHub Actions 固定 Node `24.18.0`，先执行与本地完全相同的 `npm ci --ignore-scripts --no-audit --no-fund`，再执行 manifest contract、host Config 冒烟、静态规则、路由夹具、全量测试和语法检查。
+- 新增内部 `lib/quota.js`，仅提取并导出额度规范化纯函数供宿主和脱敏测试共享；未加入 package exports，公开 API 不变。新增 `test/client-quota.test.mjs`，通过 VM 装载真实 client bundle 并执行实际 slot component，证明三个 provider id 的分支展示；`test/route-fixtures.test.mjs` 直接验证 Kimi/Qwen 规范化和两路由异常隔离。静态违规夹具使用文本扩展名，避免被 Node test runner 当作可执行测试；Config 区域无法唯一定位或对象级链式调用违规时静态门禁失败关闭。
+- `docs/DEVELOPMENT.md` 已同步依赖/版本门禁、测试调用方式、Config 上下文范围和三层验证硬边界；`.gitignore` 忽略 `node_modules/` 与 npm debug 日志。
+
+### 验证记录（门三未完成）
+
+- `node --version` / `npm --version`：`v24.18.0` / `11.16.0`；`package-lock.json` 由该 Node/npm 组合生成，`packageManager` 记录精确 npm 版本。
+- `npm ci --ignore-scripts --no-audit --no-fund`：按 CI 完全相同命令成功安装锁定依赖；GitHub Actions workflow 本身本轮未远程触发，不把本地结果写成 CI 已实跑。
+- 目标回归：manifest contract、真实 host import/Config、Config 静态规则、脱敏路由夹具 **18/18 通过**；新增 Kimi 5h/remaining、Qwen `remainingPercent`、`quota()` 两路隔离，以及真实 client bundle 的三个 provider 分支执行断言。
+- 全量 `node --test`：**44/44 通过**；`lib/index.js`、`lib/client.js`、`lib/fold.js`、`lib/quota.js` 分别执行 `node --check` 均通过（不能把多个文件作为一次 `node --check` 调用，否则 Node 只检查第一个参数）。
+- `npm pack --dry-run --json --ignore-scripts`：独立审计在家用机复核成功；发布清单明确包含 `lib/quota.js`，确认内部规范化模块不会因打包清单遗漏而失效。
+- 静态规则实证：生产 `lib/index.js` 通过；Config 外合法 `Date.parse` 正例通过；Config 内 `.optional()`、`.nullable()`、`.parse()`、`.safeParse()` 反例均被拦截。
+- 根仓库 `python tools/checks.py --json`：C1–C5、C8 PASS，C6 INFO，C7 WARN（当前工作区有本次未提交变更），**0 FAIL**；命令因 WARN 返回退出码 1，未用 `--no-verify` 绕过。
+- **单位 DSH 真实启动未执行**：机器指纹匹配家用机而非单位机，不能跨机套用单位环境；因此未启动真实 DSH，也未验证 Qwen/Kimi live 路由或额度。该项不是“可忽略的未验证”，而是发布前门三阻断条件。
+- **K3 独立模型复检**：前 3 轮已记录：第 1 轮指出 CI 多文件 `node --check` 和 Config 无法定位时失败关闭两项 P2；第 2 轮指出对象级 `z.object(...).optional()` 扫描缺口；第 3 轮因只读沙箱 `mkdtemp` 两项 `EPERM` 与模型超时未形成结论。本轮新增额度/真实 client seam 和精确 CI 安装命令后，独立审计第三轮在家用机重新执行并确认：精确安装成功，目标回归 **18/18**、全量 **44/44**，四个 lib 文件语法通过，`git diff --check` 无错误，根检查 0 FAIL/C7 WARN，`npm pack --dry-run --json --ignore-scripts` 成功且包含 `lib/quota.js`；人工核对确认额度纯函数提取语义等价、未加入 package exports，route/client 夹具均实际执行。结论为**代码侧 K3 审通过，无新增问题**。该结论不覆盖单位 DSH 真实启动，门三硬门仍阻断。
+
+### 回滚
+
+- 代码、测试、CI、依赖与 lockfile：回退本次维护变更，恢复 `77481b1` 行为；不改日志格式、用户费率表或额度数据。
+- 若精确 `npm ci --ignore-scripts --no-audit --no-fund`、真实 host import 或静态规则失败，保持阻断并修复依赖/测试边界，不降级为“只看纯函数通过”、全局安装或宽松安装。
+- 单位环境：不自动改模型、凭据、profile 或服务；只在机主明确授权后按记录执行启动、停止或回退。
+
+### 明日单位机接手待办（2026-08-25）
+
+- [ ] 先按 tool-library `本机环境一句话.md` 读取硬件指纹，唯一匹配单位机后再读 `machines/单位机.md`；不套用家用机路径、代理或服务结论。
+- [ ] 从 GitHub 候选分支 `codex/config-startup-regression-gates` 取得代码，核对候选 commit；该分支保持“未交付”状态，不直接合入 `master`。
+- [ ] 执行 `node --version` / `npm --version`，应为 `v24.18.0` / `11.16.0`；随后运行 `npm ci --ignore-scripts --no-audit --no-fund`、`node --test` 和四个 `lib` 文件的逐文件 `node --check`。
+- [ ] 在候选 commit 上执行 `npm pack --ignore-scripts`，记录生成包的 SHA-256；单位 DSH 安装该 `.tgz`，不直接把工作区源码覆盖到 profile。
+- [ ] 安装前备份单位 DSH 当前 profile manifest/lockfile、`cordis.patch.yml` 和现用 `dsh-turn-cost` 版本，确保可恢复；敏感配置与凭据不复制、不入库。
+- [ ] 启动真实 `dsh web`，确认插件树完成加载并监听；重点确认不再出现 Config/import 静态初始化崩溃。
+- [ ] 用单位现有会话或脱敏新会话核对：DeepSeek 按量显示金额，Kimi 显示 5h 消耗/剩余，Qwen 显示剩余比例，历史 `qwen-token-plan` 会话仍兼容。没有实测到的项目明确记“未验证”，不得猜测为通过。
+- [ ] 停止 dsh web 后检查无残留进程；按备份恢复旧版本并复启一次，再重新安装候选包，实证回滚与恢复路径。
+- [ ] 只落盘脱敏证据：日期、单位机硬件匹配、候选 commit、包 SHA-256、Node/npm 版本、测试计数、监听结果、三路由结果、停止/残留和回滚结果；不记录密钥、账号、原始日志或完整 profile。
+- [ ] 单位实测全部通过后更新本节和门禁状态，再请求门三确认。远程 Actions 只有在创建 PR 或更新 `master` 时才会触发；仅推送候选分支不得写成 CI 已通过。未经新的明确指令不合并 `master`、不发布 npm。
+
+### 门禁
+
+门一已确认，门二已由机主批准并完成方案范围内实施与自动验证；当前停在门三。由于当前机器不是单位机，单位 DSH 真实启动这一发布前硬门未满足，**门三阻断，保持未交付**。不得以 44/44 单测、未远程实跑的 CI 配置或脱敏夹具替代真实启动；推送与 npm 发布继续只接受机主明确指令。

@@ -1,0 +1,9 @@
+import z from "@deepseek-ai/schemastery";
+
+class GoodConfig {
+  static Config = z.object({ ratesPath: z.string() });
+}
+
+const unrelatedTimestamp = Date.parse("2026-08-24T00:00:00Z");
+void GoodConfig;
+void unrelatedTimestamp;

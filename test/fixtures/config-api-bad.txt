@@ -1,0 +1,12 @@
+import z from "@deepseek-ai/schemastery";
+
+class BadConfig {
+  static Config = z.object({
+    optionalValue: z.string().optional(),
+    nullableValue: z.string().nullable(),
+    parseValue: z.string().parse(),
+    safeParseValue: z.string().safeParse(),
+  });
+}
+
+void BadConfig;

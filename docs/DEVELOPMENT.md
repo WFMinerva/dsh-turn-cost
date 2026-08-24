@@ -8,6 +8,7 @@
 |---|---|---|
 | `lib/fold.js` | 纯计费核心：zstd 日志解帧、按 (轮,步) 折叠 usage、峰谷计价 | **零依赖**，可直接被 node 单测；所有金额口径都在这里 |
 | `lib/index.js` | host 端服务：`TurnCostService`，Typert Remote 端点 `turnCost/query` | 顶部 `__esDecorate` 是手工转译的 stage-3 装饰器，**不要删** |
+| `lib/quota.js` | host/client 测试共享的额度响应纯规范化函数 | 包内部测试接缝，未加入 `package.json` 的 `exports`，不改变公开 API |
 | `lib/client.js` | 浏览器 bundle：`assistant-actions` 槽位里的灰色金额行 | 手工写的 `window.__ModuleLoader__` CJS 格式，**不需要打包器** |
 | `cordis.patch.yml` | bundle patch：往 profile 插入一行 `turn-cost` | 用户层可用同 id 覆盖（用户层后应用、同 id 行胜出） |
 | `test/fold.test.mjs` | `fold.js` 的纯函数单测 | `node --test test/` 运行，无网络无依赖 |
@@ -87,7 +88,19 @@ DeepSeek 调价（官网定价页变化）时：
 - 验证 UI：重启 DSH web，刷新 http://127.0.0.1:3080，看每条 AI 回复下方的灰色金额行
 
 ```bash
-node --test              # 纯函数单测，秒级（默认 glob 自动匹配 test/*.test.mjs）
+node --version            # CI 固定 v24.18.0（Node 24 主版本）
+npm --version             # lockfile 生成与 CI 固定 11.16.0
+npm ci --ignore-scripts --no-audit --no-fund # CI 与本地完全相同的锁定安装命令
+node --test test/package-manifest-contract.test.mjs
+node --test test/host-config.test.mjs
+node --test test/config-source-rule.test.mjs
+node --test test/route-fixtures.test.mjs
+node --test test/client-quota.test.mjs
+node --test                # 全量测试（默认 glob 自动匹配 test/*.test.mjs）
+node --check lib/index.js
+node --check lib/client.js
+node --check lib/fold.js
+node --check lib/quota.js
 ```
 
 用真实日志抽查（node 一行脚本）：读某会话的 `session.jsonl.zstd` → `readSessionSamples("<sessions根目录>", "<sessionId>")` → `costOfTurn(samples, 轮号)`，核对 token 数与金额。
@@ -131,5 +144,7 @@ node --test              # 纯函数单测，秒级（默认 glob 自动匹配 t
 - **`listSessions` 的目录约定**：`<dsh-home>/sessions/<workspace>/<sessionId>/session.jsonl.zstd`；目录不可读/文件缺失一律跳过，枚举永不抛。
 - **单测里的临时目录**：Windows 上首次 `mkdtemp`+写删可能触发杀软扫描（首跑 ~36s，之后 <100ms），属环境噪声不是回归。
 - **host 端改动需重启 dsh web 生效**（web profile 禁用 host 插件 HMR）；client bundle（client.js）覆盖到 profile 后由常驻 HMR 热更新（rev 变化触发，React 状态不保留）。
-- **Config/schema 只能用 schemastery 语法**：`z` 是 `@deepseek-ai/schemastery` 不是 zod——对象字段缺省即可选，**没有 `.optional()`/`.nullable()`/`.parse()` 这些 zod 链式方法**；误用会在插件 import 阶段静态初始化器抛错，cordis 整树拒载、**dsh web 启动直接崩**（2026-08-24 实锤，见方案文档变更记录 #4）。改 Config 后必须真实启动一次 dsh web 验证——单测覆盖不到 host 侧。
+- **依赖分层与版本门禁（变更记录 #7）**：`@deepseek-ai/schemastery` 是运行时直接依赖，必须只放 `dependencies`；`@deepseek-ai/cordis`、`@deepseek-ai/dsh-home-paths`、`@deepseek-ai/dsh-typert-protocol` 保留在 `peerDependencies`，并以逐字相同的范围镜像到 `devDependencies`。`test/package-manifest-contract.test.mjs` 直接读取 manifest，不依赖 `node_modules`，用于拦截未来错放依赖。`packageManager`、CI Node `24.18.0`、npm `11.16.0` 与 lockfile 生成版本必须同步；版本未精确记录时不能宣称完全可重现。
+- **Config/schema 只能用 schemastery 语法**：`z` 是 `@deepseek-ai/schemastery` 不是 zod——对象字段缺省即可选，**没有 `.optional()`/`.nullable()`/`.parse()` 这些 zod 链式方法**；误用会在插件 import 阶段静态初始化器抛错，cordis 整树拒载、**dsh web 启动直接崩**（2026-08-24 实锤，见方案文档变更记录 #4）。`test/host-config.test.mjs` 用真实依赖验证 import 与 `{}`/字符串/错误类型配置值；`test/config-source-rule.test.mjs` 只检查 Schemastery `static Config = z.object(...)` 区间，正反夹具必须保留，Config 外的 `Date.parse` 不得误报。
+- **三层验证边界（变更记录 #7）**：Config 冒烟证明 host import/schema 值语义；脱敏三路由夹具证明模型取日志、DeepSeek/Kimi/Qwen 分流、旧 Qwen id 与降级；单位 DSH 真实启动证明插件树实际加载并监听。三层不能互相替代；真实启动是发布前硬门，未获机主授权或单位环境不可用时门三阻断、保持未交付，不能只记“未验证”后继续交付。
 - **quota 端点（0.3.0）**：`turnCost/quota` 平台读数 TTL 缓存（成功 60s / 失败 10s）；`normalizeAliyunBl` 在 bl CLI 真实输出未实锤前接受多种键名拼写（total/TotalValue、remaining/TotalSurplusValue…），全不认得就降级 `bl-output-unrecognized` 并带 300 字符 raw 摘录；Kimi `usages` 响应的加油包金额单位是 1e-8 CNY、月度是 cents（已与 2026-08-22 快照交叉验证：¥28.79/¥871.21/¥1000）。

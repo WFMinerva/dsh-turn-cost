@@ -1,0 +1,55 @@
+{
+  "rates": {
+    "version": 1,
+    "currency": "CNY",
+    "models": {
+      "deepseek-official/deepseek-v4-pro": { "input": 1, "cacheRead": 0.1, "output": 2 },
+      "kimi-coding/kimi-for-coding": { "input": 0, "cacheRead": 0, "output": 0, "note": "subscription" },
+      "qwen-token-plan-cn/qwen3.6-flash": { "input": 0, "cacheRead": 0, "output": 0, "note": "subscription" },
+      "qwen-token-plan/qwen3.6-flash": { "input": 0, "cacheRead": 0, "output": 0, "note": "legacy subscription id" }
+    },
+    "aliases": {}
+  },
+  "quota": {
+    "kimi-coding": { "kind": "kimi-usages", "baseUrl": "https://example.invalid/coding/v1" },
+    "qwen-token-plan-cn": { "kind": "aliyun-bl", "command": "bl" }
+  },
+  "routes": [
+    {
+      "id": "deepseek-official",
+      "model": "deepseek-v4-pro",
+      "readout": "cost",
+      "events": [
+        { "type": "request/header", "data": { "header": { "config": { "provider": "deepseek-official", "model": "deepseek-v4-pro" } } } },
+        { "type": "assistant/message", "time": 1787443200000, "data": { "turn": 1, "step": 1, "usage": { "inputTokens": 1000000, "cacheReadTokens": 100000, "outputTokens": 200000 } } }
+      ]
+    },
+    {
+      "id": "kimi-coding",
+      "model": "kimi-for-coding",
+      "readout": "kimi-quota",
+      "events": [
+        { "type": "request/header", "data": { "header": { "config": { "provider": "kimi-coding", "model": "kimi-for-coding" } } } },
+        { "type": "assistant/message", "time": 1787443201000, "data": { "turn": 1, "step": 1, "usage": { "inputTokens": 1200, "cacheReadTokens": 300, "outputTokens": 500 } } }
+      ]
+    },
+    {
+      "id": "qwen-token-plan-cn",
+      "model": "qwen3.6-flash",
+      "readout": "qwen-quota",
+      "events": [
+        { "type": "request/header", "data": { "header": { "config": { "provider": "qwen-token-plan-cn", "model": "qwen3.6-flash" } } } },
+        { "type": "assistant/message", "time": 1787443202000, "data": { "turn": 1, "step": 1, "usage": { "inputTokens": 900, "cacheReadTokens": 100, "outputTokens": 400 } } }
+      ]
+    },
+    {
+      "id": "qwen-token-plan",
+      "model": "qwen3.6-flash",
+      "readout": "qwen-quota",
+      "events": [
+        { "type": "request/header", "data": { "header": { "config": { "provider": "qwen-token-plan", "model": "qwen3.6-flash" } } } },
+        { "type": "assistant/message", "time": 1787443203000, "data": { "turn": 1, "step": 1, "usage": { "inputTokens": 800, "cacheReadTokens": 50, "outputTokens": 350 } } }
+      ]
+    }
+  ]
+}
