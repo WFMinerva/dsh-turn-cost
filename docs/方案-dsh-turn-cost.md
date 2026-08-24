@@ -252,8 +252,13 @@ B 轻流程（改 bug），机主一句话对齐后修复+复检；本记录按 
 ### 验证
 
 - `node --test` 26/26；`node --check` 三 lib 全过；client 无头冒烟过。
-- 端点级实测待机主再次重启 dsh web（host 端 `query` 返回 provider/requests + 金额恢复）。
+- **端点级实测（2026-08-24 机主第二次重启后，真实 dsh web 进程内 `/api` 直调）**：
+  1. `turnCost/query` DeepSeek turn：provider=deepseek-official, cost=¥0.2629, requests=13 ✅ 金额恢复
+  2. `turnCost/query` Kimi turn：provider=kimi-coding, cost=0, requests=62 ✅ 徽章走 quota 分支
+  3. `turnCost/query` Qwen turn：provider=qwen-token-plan（旧 id）, cost=0, requests=1 ✅ 兼容旧 id
+  4. `turnCost/sessionTotals` 混合会话：cost=¥0.2629 ✅ 金额恢复
+  5. `turnCost/quota`：Kimi 5h 53/100 remaining=47；**Qwen ok=True usedPct=15.5% remainingPct=84.5% expire=2026-08-31** ✅ bl CLI 登录成功，阿里路由首次端到端打通
 
 ### 门禁
 
-机主对金额/额度口径已逐项拍板（本节「机主重述」）；实施后待机主重启 + GUI 目检收尾门三。推送与 npm 发布仍待机主指令。
+机主对金额/额度口径已逐项拍板（本节「机主重述」）；端点级实测三条路由全通；待机主 GUI 目检收尾门三。推送与 npm 发布仍待机主指令。
