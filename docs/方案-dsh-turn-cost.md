@@ -82,4 +82,6 @@
 
 ### 发布记录
 
-- 待机主「推送 / 发布 npm」指令；提交 `d7f3a28` 已在本地 master（未推送）。
+- 2026-08-24 机主授权「推送 + npm 发布」。
+- GitHub：`d7f3a28`(fix) + `5ee8de9`(docs) 已推送 `origin/master`，远端 SHA `5ee8de9` 核验一致。
+- npm：`0.1.3` 打包预演通过（7 文件：`lib/*` + `cordis.patch.yml` + README/LICENSE/package.json，12.2kB）；发布待机主本机 `npm login`（2FA）+ `npm publish`。
