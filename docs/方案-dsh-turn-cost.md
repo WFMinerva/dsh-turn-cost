@@ -130,7 +130,7 @@
 - `node --test`：22 项通过、0 项失败（基线 11 项原样通过 + 新增 11 项，复跑稳定 ~100ms）。
 - `node --check`：lib/index.js、lib/client.js、lib/fold.js 语法全过；client 端另有自建无头冒烟（stub react/ctx 执行 factory + apply + 三组件首渲染，断言 slot 名、locale 键集、投影回退渲染、零用量空渲染）。
 - 真实日志抽查（只读 smoke，`%TEMP%\turn-cost-smoke.mjs`）：枚举到 150 个会话全部可折叠；抽 5 个会话（含 366 步的大会话）四桶总量与 `storages/session_projcache.json` 的官方 tokenUsage 投影**逐桶 MATCH 5/5**；按天分组输出正常。
-- 踩坑：①Windows 临时目录首跑触发杀软扫描，listSessions 单测首跑 ~36s、复跑 <100ms（环境噪声）；②ESM import Windows 绝对路径必须 file:// URL；③tierCost 必须容忍样本缺桶字段（Number(x)||0），否则 NaN。
+- 踩坑：①Windows 临时目录首跑触发杀软扫描，listSessions 单测首跑 ~36s、复跑 <100ms（环境噪声）；②ESM import Windows 绝对路径必须 file:// URL；③tierCost 必须容忍样本缺桶字段（Number(x)||0），否则 NaN；④**client bundle 覆盖到 profile 后无需重启即热更新**（dsh-client-hmr 常驻 stat-poll，rev 变化即重载；实测 `GET /plugins/dsh-turn-cost/client.js` 立即返回新版）——但 host 端端点仍须重启 dsh web。
 - 本机部署：profile 副本已同步 0.2.0（lib/package.json/cordis.patch.yml 手工覆盖）；机主费率表已落 `C:\Users\Admin\.dsh\turn-cost-rates.json`（Allegro 四模型 + Token Plan 十三模型全 0 价登记 + qwen 池 deepseek 作用域键）；profile `cordis.patch.yml` 同 id 覆盖 ratesPath。
 - **K3 独立模型审第 1 轮（codex 0.146.0，只读沙箱）**：结论「需修改」——核心五项（fold 不变式、装饰器转译、RPC wire、client 约束、summary 聚合）静态核验全过；3 项实质 + 3 项建议，逐项修复如下：
   1. package.json `files` 白名单补 `rates.example.json`（出厂示例随 npm 分发）✅
@@ -145,3 +145,33 @@
 ### 发布记录
 
 - 版本 0.2.0 已 bump；推送与 npm 发布待机主指令（npm 2FA 必须机主本人操作）。
+
+## 变更记录 #4（2026-08-24，B 轻流程·改 bug）
+
+### 事故
+
+机主报告 DSH 打不开：`npx @deepseek-ai/dsh web` 启动即崩，错误链 `plugin tree failed to load → failed to import loader entry turn-cost (dsh-turn-cost): z.string(...).optional is not a function`，崩点 `lib/index.js:133` 的 `static Config = z.object({ ratesPath: z.string().optional() })`。
+
+### 根因
+
+`z` 来自 `@deepseek-ai/schemastery`（3.18.1），**不是 zod**：其 schema 对象没有 `.optional()` 方法（字段缺省即"可选"，反向语义是 `.required()`）。0.2.0 新增 Config 字段时误用 zod 写法，静态初始化器在插件 import 阶段抛 TypeError，cordis 加载器因此整树拒载——**单个插件的 Config 声明错误会拖崩整个 dsh web 启动**。
+
+### 修复
+
+- `lib/index.js:133`：`z.string().optional()` → `z.string()`（schemastery 对象字段缺省可选，已用真实 schemastery 3.18.1 实证：`{}` 通过、`{ratesPath:"x"}` 通过、错误类型拒绝），并加注释防止再犯。
+- 全库排查 `.optional()/.nullable()/.parse()/.safeParse()` 等 zod 风格调用：仅此一处。
+- 部署副本（`profiles/web/node_modules/dsh-turn-cost/lib/index.js`）与源码同步，diff 归零。
+
+### 复检
+
+- `node --test`：22/22 通过。
+- 真实启动验证：`npx @deepseek-ai/dsh web` 跑通插件树加载，输出 `dsh web: http://127.0.0.1:3080` 正常监听（验证后已停掉，无机主进程残留）。
+
+### 遗留观察（非阻断）
+
+- 测试盲区：22 项测试只覆盖 fold.js 纯函数与 client 无头冒烟，**没有任何用例 import host 端 index.js**（仓库无 cordis/schemastery 依赖，单测环境装不出 host 侧）；本次事故正是该盲区漏出的。后续若加 host 侧冒烟，需以真实 schemastery 断言 Config 可实例化。
+- DEVELOPMENT.md 踩坑清单建议补一条：「Config/schema 只能用 schemastery 语法，禁用 zod 的 `.optional()` 等链式方法」。
+
+### 门禁
+
+B 轻流程（改 bug），机主一句话对齐后修复+复检；本记录按 C 口径落盘。GUI 实测（变更记录 #3 验收 3/4）仍待 dsh web 重启窗口——现在机主可自行重启，顺带完成实测。
