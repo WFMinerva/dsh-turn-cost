@@ -2,15 +2,15 @@
 
 [![featured in awesome-dsh-plugin](https://img.shields.io/badge/awesome--dsh--plugin-featured-2ea44f)](https://github.com/beancookie/awesome-dsh-plugin)
 
-DeepSeek Harness（dsh）Web UI 插件：显示**这个对话用的是哪个模型、烧掉订阅额度的多少比例、还剩多少**（Kimi/阿里 Token Plan 窗口读数）；另保留轮级/会话级/跨对话的 token 账与金额估算（金额默认隐藏，可配置开启）。
+DeepSeek Harness（dsh）Web UI 插件：**按对话实际用的路由分流显示**——官方按量模型（DeepSeek）显示金额（¥），Kimi/阿里 Token Plan 订阅路由显示「本轮 token + 消耗会员额度百分之几 + 剩余百分之几」；另有会话级/跨对话汇总。
 
-A [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (dsh) web plugin that shows **which model a conversation actually used and how much of your subscription quota windows it burned — and how much is left** (Kimi coding subscription / Alibaba Token Plan), plus per-turn / per-session / cross-session token accounting with optional cost estimates (hidden by default since 0.3.0). Ships the [official DeepSeek CNY peak/off-peak rates](https://api-docs.deepseek.com/quick_start/pricing/) and accepts your own rate table.
+A [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (dsh) web plugin that shows, per conversation and per turn, **which route the model actually used**: pay-as-you-go DeepSeek turns show money (¥) while Kimi / Alibaba Token Plan subscription turns show tokens plus the quota window share consumed and the percentage remaining; session-level and cross-session summaries round it out. Ships the [official DeepSeek CNY peak/off-peak rates](https://api-docs.deepseek.com/quick_start/pricing/) and accepts your own rate table.
 
-> k3-256k · 本会话 12.3万 token · 缓存读 97% · 5h 窗口 本会话 12 次 ≈12% · 还剩 88
+> 官方按量：本轮 ¥0.23 · 1.2万 token · 缓存读 98% ／ Kimi 订阅：本轮 12.3万 token · 5h 额度消耗 12% · 剩余 47% ／ Qwen 订阅：本轮 3.4万 token · 剩余 40%
 
 - **订阅额度窗口（0.3.0）**：Kimi 订阅走官方 `GET /coding/v1/usages` 端点读 5 小时/7 天窗口的已用/上限/剩余/重置时间与加油包余额；阿里 Token Plan 走官方 `bl usage token-plan` CLI——见下文「订阅额度窗口」
-- **单对话占比**：会话读数条显示「本会话在 5h 窗口发起 N 次 ≈ 占窗口 X%」（配额单位=请求数；仅 DSH 发起的调用可归因）
-- **人民币计价（默认隐藏）**，内置 [DeepSeek 官方定价](https://api-docs.deepseek.com/zh-cn/quick_start/pricing/)（峰谷按北京时间）；费率表 `display.showCost: true` 恢复
+- **单对话/单轮占比**：Kimi 路由显示「本轮在 5h 窗口发起 N 次 ≈ 占窗口 X%」（配额单位=请求数；仅 DSH 发起的调用可归因）；阿里侧因 Credits 无法精确归因，只显示剩余比例（不编造消耗百分比）
+- **人民币计价**，内置 [DeepSeek 官方定价](https://api-docs.deepseek.com/zh-cn/quick_start/pricing/)（峰谷按北京时间）——官方按量路由显示金额，订阅路由按 0 价登记只显 token
 - **自定义费率表**：任意模型可配单价（含缓存写），订阅制模型按 0 价登记只显 token
 - 金额基于 **provider 上报的真实 usage**（未缓存输入 / 缓存读 / 输出分桶计费），不是估算 token 数
 - 一条用户消息引发的整轮（含中间工具步骤）合并计为一轮，绝不重复计
@@ -32,7 +32,7 @@ A [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (dsh) web 
 
 ③ 会话页头动作行出现「额度汇总」按钮，点开面板看**订阅额度窗口**（Kimi 5h/7 天/加油包、阿里 Token Plan 7 天限额）与全部会话的合计、按模型分组、按天分组（近 14 天）。
 
-- 金额精确到分，不足半分显示 `<¥0.01`（0.3.0 起默认隐藏）
+- 金额精确到分，不足半分显示 `<¥0.01`（仅官方按量路由显示金额；订阅路由只显 token 与额度占比）
 - token 数为总消耗（万为单位），口径与 dsh 官方统计条逐桶一致
 - 缓存读占比 = 缓存命中 token ÷（缓存命中 + 未命中输入），一眼看出长对话的省钱效果
 

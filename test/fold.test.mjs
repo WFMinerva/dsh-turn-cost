@@ -304,13 +304,11 @@ test("requestsInWindow: garbage inputs degrade to 0, never throw", () => {
   assert.equal(requestsInWindow({ 0: { provider: "kimi-coding" } }, "kimi-coding", 0, 1), 0);
 });
 
-test("quotaConfigOf: display defaults to cost hidden; quota routes validated", () => {
-  // Absent blocks → defaults (门二 v2: 金额默认隐藏).
-  assert.deepEqual(quotaConfigOf({ version: 1, models: {} }), { display: { showCost: false }, quota: {} });
-  assert.deepEqual(quotaConfigOf(null), { display: { showCost: false }, quota: {} });
-  assert.deepEqual(quotaConfigOf("junk"), { display: { showCost: false }, quota: {} });
-  const { display, quota } = quotaConfigOf({
-    display: { showCost: true },
+test("quotaConfigOf: quota routes validated; absent blocks → empty table", () => {
+  assert.deepEqual(quotaConfigOf({ version: 1, models: {} }), {});
+  assert.deepEqual(quotaConfigOf(null), {});
+  assert.deepEqual(quotaConfigOf("junk"), {});
+  const quota = quotaConfigOf({
     quota: {
       "kimi-coding": { kind: "kimi-usages", credentialRef: "KIMI_CODING_API_KEY", baseUrl: "https://api.kimi.com/coding/v1" },
       "qwen-token-plan-cn": { kind: "aliyun-bl", command: "bl" },
@@ -321,7 +319,6 @@ test("quotaConfigOf: display defaults to cost hidden; quota routes validated", (
       "evil-cmd": { kind: "aliyun-bl", command: "bl && echo pwned" },  // shell metacharacters rejected
     },
   });
-  assert.equal(display.showCost, true);
   assert.deepEqual(quota["kimi-coding"], { kind: "kimi-usages", credentialRef: "KIMI_CODING_API_KEY", baseUrl: "https://api.kimi.com/coding/v1" });
   assert.deepEqual(quota["qwen-token-plan-cn"], { kind: "aliyun-bl", command: "bl" });
   assert.equal(Object.hasOwn(quota, "bad-kind"), false);
@@ -332,9 +329,7 @@ test("quotaConfigOf: display defaults to cost hidden; quota routes validated", (
   assert.ok(QUOTA_KINDS.has("kimi-usages") && QUOTA_KINDS.has("aliyun-bl"));
 });
 
-test("quotaConfigOf: prototype-name keys and non-boolean showCost never leak", () => {
-  const parsed = JSON.parse(`{"display":{"showCost":"yes"},"quota":{"__proto__":{"kind":"kimi-usages"},"constructor":{"kind":"aliyun-bl"}}}`);
-  const { display, quota } = quotaConfigOf(parsed);
-  assert.equal(display.showCost, false);
-  assert.deepEqual(Object.keys(quota), []);
+test("quotaConfigOf: prototype-name keys never leak", () => {
+  const parsed = JSON.parse(`{"quota":{"__proto__":{"kind":"kimi-usages"},"constructor":{"kind":"aliyun-bl"}}}`);
+  assert.deepEqual(Object.keys(quotaConfigOf(parsed)), []);
 });

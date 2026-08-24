@@ -32,10 +32,6 @@
   "aliases": {
     "k3": "k3-256k"
   },
-  "display": {
-    "showCost": false,
-    "_note": "0.3.0 起金额默认隐藏；改 true 恢复 ¥ 显示"
-  },
   "quota": {
     "kimi-coding": {
       "kind": "kimi-usages",

@@ -229,3 +229,31 @@ B 轻流程（改 bug），机主一句话对齐后修复+复检；本记录按 
 ### 门禁
 
 门一（v1）/门二（v1）/门一重拍（v2）/门二（v2）均已拍板；待门三。机主配合项：①重启 dsh web（host 端 quota 端点生效）；②阿里侧 `npm i -g bailian-cli` 并完成控制台登录（不装则阿里区安静降级为「暂读不到」）。推送与 npm 发布待机主指令。
+
+## 变更记录 #6（2026-08-24，0.3.0 门三修正：金额按路由分流）
+
+### 事故
+
+机主实测 0.3.0 后指出：**官方按量 DeepSeek 对话的金额不见了**（显示成「本轮 234万 token · 缓存读 100%」）。这是门二 v2「金额默认隐藏」拍板被我过度实现——`maskCost` 一刀切把**所有**路由的 cost 置 null，把 0.1.3 起就该有的官方按量金额也藏掉了。
+
+### 机主重述的正确口径（2026-08-24）
+
+- 官方按量（DeepSeek pro/flash）→ 显示金额（¥）——这是最开始的正确功能；
+- kimi / Qwen 订阅对话 → 显示「本轮多少 token + 消耗会员额度百分之几 + 剩余百分之几」；
+- 拍板细节：kimi 用 5h 窗口；Qwen 只显 token + 剩余%（Credits 精确归因不可得，不编造消耗%）。
+
+### 修复
+
+- 撤除 `maskCost` 与 `display.showCost`（`quotaConfigOf` 只留 `quota` 块；三端点不再置 null，恢复 0.2.0 金额语义）。
+- `turnCost/query` 返回值增 `provider` 与 `requests`（该轮实际路由 + 调用数）。
+- client 每轮徽章按 `result.provider` 分流：`kimi-coding` → 「本轮 token · 5h 额度消耗 X% · 剩余 Y%」；`qwen-token-plan-cn` → 「本轮 token · 剩余 Y%」；其余（官方按量）→ `cost>0` 显金额、否则 tokens-only。
+- locale 增 `badge.quota`/`badge.qwen` 及 title；汇总面板金额列恢复常显（订阅模型行仍 `—`）；README/CHANGELOG/DEVELOPMENT 同步，决策 #20 改写为「金额按路由分流，勿再设全局开关」。
+
+### 验证
+
+- `node --test` 26/26；`node --check` 三 lib 全过；client 无头冒烟过。
+- 端点级实测待机主再次重启 dsh web（host 端 `query` 返回 provider/requests + 金额恢复）。
+
+### 门禁
+
+机主对金额/额度口径已逐项拍板（本节「机主重述」）；实施后待机主重启 + GUI 目检收尾门三。推送与 npm 发布仍待机主指令。
