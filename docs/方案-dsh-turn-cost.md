@@ -83,5 +83,6 @@
 ### 发布记录
 
 - 2026-08-24 机主授权「推送 + npm 发布」。
-- GitHub：`d7f3a28`(fix) + `5ee8de9`(docs) 已推送 `origin/master`，远端 SHA `5ee8de9` 核验一致。
-- npm：`0.1.3` 打包预演通过（7 文件：`lib/*` + `cordis.patch.yml` + README/LICENSE/package.json，12.2kB）；发布待机主本机 `npm login`（2FA）+ `npm publish`。
+- GitHub：`d7f3a28`(fix) + `5ee8de9`(docs 变更记录#2) + `cdd2c66`(docs 发布记录) 已推送 `origin/master`，远端 SHA `cdd2c66` 核验一致。
+- npm：`dsh-turn-cost@0.1.3` 已发布为公共包；registry 核验 `version=0.1.3`、`latest=0.1.3`（2026-08-24 03:20:27Z）。
+- 本机 profile 副本已同步至 0.1.3（`lib/fold.js` 含 `deepseek-v4-flash-vision-exp` 价目）；待重启 dsh web 生效。
