@@ -27,7 +27,7 @@ test("installer pins the DSH launcher per versions.json and keeps the pnpm build
   }
 });
 
-test("installer never reads the DSH credential store or bypasses Kimi server auth", async () => {
+test("installer never reads the DSH credential store or forces the optional Kimi loopback service", async () => {
   const install = await readFile(new URL("../installer/Install.ps1", import.meta.url), "utf8");
   const launch = await readFile(new URL("../installer/Launch.ps1", import.meta.url), "utf8");
   assert.doesNotMatch(install, /\.credentials\.yaml/i);
@@ -35,9 +35,8 @@ test("installer never reads the DSH credential store or bypasses Kimi server aut
   assert.doesNotMatch(install, /@deepseek-ai\/dsh['"@, ]+--version/);
   assert.match(install, /Kind = 'isolated-pnpm'/);
   assert.match(install, /install', '--frozen-lockfile/);
-  assert.match(launch, /Authorization\s*=\s*"Bearer \$Token"/);
-  assert.match(launch, /\/api\/v1\/shutdown/);
-  assert.match(launch, /ContentType 'application\/json' -Body '\{\}'/);
+  assert.doesNotMatch(launch, /server\.token|58627|kimi\.cmd|Invoke-KimiJson/);
+  assert.match(launch, /@\(\$state\.dsh\.prefix\) \+ @\('web'\)/);
 });
 
 test("Windows entry scripts stay process-scoped and do not create persistence", async () => {
@@ -46,7 +45,7 @@ test("Windows entry scripts stay process-scoped and do not create persistence", 
   const combined = `${install}\n${launch}`;
   assert.doesNotMatch(combined, /Register-ScheduledTask|schtasks|New-Service|Set-ExecutionPolicy/i);
   assert.doesNotMatch(combined, /New-NetFirewallRule|netsh\s+advfirewall/i);
-  assert.match(launch, /127\.0\.0\.1:58627/);
+  assert.doesNotMatch(launch, /127\.0\.0\.1:58627/);
 });
 
 test("versions.json is the single deployment pin source and every derived file agrees", async () => {
@@ -66,6 +65,8 @@ test("versions.json is the single deployment pin source and every derived file a
   assert.match(dshLock, new RegExp(`specifier: ${versions.dsh.version.replace(/\./g, "\\.")}`));
   assert.equal(pkg.version, lock.version);
   assert.match(build, /versions\.json/);
+  assert.match(build, /pluginHash\.Substring\(0, 12\)/);
+  assert.match(build, /contentTgzName/);
   assert.doesNotMatch(build, /'deepseek-official'/);
 });
 

@@ -185,15 +185,49 @@ function Install-PackageCopy([string]$DshHome, [string]$Root) {
   $rootFull = [IO.Path]::GetFullPath($Root).TrimEnd('\')
   if (-not $rootFull.Equals($packageTarget.TrimEnd('\'), [StringComparison]::OrdinalIgnoreCase)) {
     $staging = Assert-ChildPath $DshHome (Join-Path $DshHome ('turn-cost-installer-package.staging-' + [Guid]::NewGuid().ToString('N')))
+    $previous = $null
     New-Item -ItemType Directory -Path $staging | Out-Null
     try {
       Get-ChildItem -LiteralPath $Root -Force | ForEach-Object {
         Copy-Item -LiteralPath $_.FullName -Destination $staging -Recurse -Force
       }
-      if (Test-Path -LiteralPath $packageTarget) { Remove-Item -LiteralPath $packageTarget -Recurse -Force }
-      Move-Item -LiteralPath $staging -Destination $packageTarget
+      # The current profile can still reference the previous content-addressed
+      # tarball while DSH is preparing the replacement dependency. Preserve
+      # prior payload tgz files through the package-root swap so pnpm never
+      # encounters a dangling file: URL during an in-place candidate upgrade.
+      $oldPayload = Join-Path $packageTarget 'payload'
+      $newPayload = Join-Path $staging 'payload'
+      if (Test-Path -LiteralPath $oldPayload -PathType Container) {
+        New-Item -ItemType Directory -Force -Path $newPayload | Out-Null
+        Get-ChildItem -LiteralPath $oldPayload -Filter '*.tgz' -File | ForEach-Object {
+          $preserved = Join-Path $newPayload $_.Name
+          if (-not (Test-Path -LiteralPath $preserved -PathType Leaf)) {
+            Copy-Item -LiteralPath $_.FullName -Destination $preserved
+          }
+        }
+      }
+      if (Test-Path -LiteralPath $packageTarget) {
+        $previous = Assert-ChildPath $DshHome (Join-Path $DshHome ('turn-cost-installer-package.previous-' + [Guid]::NewGuid().ToString('N')))
+        Move-Item -LiteralPath $packageTarget -Destination $previous
+      }
+      try {
+        Move-Item -LiteralPath $staging -Destination $packageTarget
+      } catch {
+        if ($null -ne $previous -and (Test-Path -LiteralPath $previous) -and -not (Test-Path -LiteralPath $packageTarget)) {
+          Move-Item -LiteralPath $previous -Destination $packageTarget
+          $previous = $null
+        }
+        throw
+      }
+      if ($null -ne $previous -and (Test-Path -LiteralPath $previous)) {
+        try { Remove-Item -LiteralPath $previous -Recurse -Force }
+        catch { Write-Warning '旧安装包目录暂未清理；当前永久载荷已就绪，不影响运行' }
+      }
     } finally {
       if (Test-Path -LiteralPath $staging) { Remove-Item -LiteralPath $staging -Recurse -Force }
+      if ($null -ne $previous -and (Test-Path -LiteralPath $previous) -and -not (Test-Path -LiteralPath $packageTarget)) {
+        Move-Item -LiteralPath $previous -Destination $packageTarget
+      }
     }
   }
   return $packageTarget
@@ -315,4 +349,4 @@ $state = [ordered]@{
 }
 Write-State $dshHome $state
 Write-Step 'INSTALL_OK：插件与启动入口已就绪'
-Write-Step '下一步：在 DSH 设置→模型中手动填写 Kimi/Qwen API Key；再完成 kimi login 与 bl 控制台登录'
+Write-Step '下一步：在 DSH 设置→模型中手动填写 Kimi/Qwen API Key；Qwen 额度另需 bl 控制台登录（仅显式使用 Kimi loopback 时才需 kimi login）'

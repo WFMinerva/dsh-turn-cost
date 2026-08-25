@@ -42,10 +42,20 @@ function Build-Once([string]$ZipPath) {
     $tgzPath = Join-Path $payload $tgzName
     if (-not (Test-Path -LiteralPath $tgzPath -PathType Leaf)) { throw 'PACK_OUTPUT_MISSING' }
 
+    # A corrected candidate may legitimately keep the same semver before
+    # publication.  Give the local tarball a content-addressed path so DSH's
+    # package manager cannot treat changed bytes at the old file: URL as an
+    # already-installed dependency and leave stale node_modules behind.
+    $pluginHash = Get-FileSha256 $tgzPath
+    $contentTgzName = ('dsh-turn-cost-' + $version + '-' + $pluginHash.Substring(0, 12).ToLowerInvariant() + '.tgz')
+    $contentTgzPath = Join-Path $payload $contentTgzName
+    Move-Item -LiteralPath $tgzPath -Destination $contentTgzPath
+    $tgzName = $contentTgzName
+    $tgzPath = $contentTgzPath
+
     Get-ChildItem -LiteralPath (Join-Path $repo 'installer') -Force | ForEach-Object {
       Copy-Item -LiteralPath $_.FullName -Destination $stage -Recurse -Force
     }
-    $pluginHash = Get-FileSha256 $tgzPath
     $kimiName = '@moonshot-ai/kimi-code'
     $manifest = [ordered]@{
       schemaVersion = 1

@@ -2,6 +2,15 @@
 
 本文件按 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 维护，版本号遵循语义化版本。
 
+## [0.4.1] - 2026-08-25
+
+### Fixed
+
+- Windows 候选包改用内容寻址 tgz 文件名，并在迁移时保留旧 tgz，避免 profile 的既有 `file:` 依赖在包目录切换期间断链。
+- 修复同版本候选被 pnpm 复用旧 `node_modules` 的问题：正式修正版升为 0.4.1，遵守版本不可变原则，确保官方 Kimi API 默认链实际部署。
+- 日常启动器不再强制启动/登录 Kimi loopback 服务；默认直接启动 DSH，只有显式配置 loopback 的用户自行管理该可选服务。
+- 修复维护验收器把子进程正常日志误当退出码，以及 DSH shim 退出后未能停止真实 3080 监听进程的问题。
+
 ## [0.4.0] - 2026-08-25
 
 ### Changed

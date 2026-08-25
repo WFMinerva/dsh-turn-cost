@@ -4,7 +4,7 @@
 #       报告只收白名单字段；凭据零接触（不进报告/日志/仓库、不打印、不复制；唯一例外：
 #       Kimi loopback bearer 令牌内存即用，见 vendor/maintenance/redaction-rules.md）。
 
-$script:Acc = @{ startedKimi = $false; dshProcess = $null; kimiProcess = $null; extract = $null; backupPath = $null; dshExe = $null; dshHome = $null; baselineProfileHash = $null; zip = $null }
+$script:Acc = @{ startedKimi = $false; dshProcess = $null; dshListenerPid = $null; kimiProcess = $null; extract = $null; backupPath = $null; dshExe = $null; dshHome = $null; baselineProfileHash = $null; zip = $null }
 
 function Get-JsonProperty($Obj, [string]$Name) {
   if ($null -eq $Obj) { return $null }
@@ -163,8 +163,14 @@ function Get-Artifacts {
 # ---------- acceptance（真实链：必须在 DSH 之外运行） ----------
 
 function Invoke-AcceptancePs1([string]$Mode, [string]$PackageRoot) {
-  & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PackageRoot 'Install.ps1') -Mode $Mode -PackageRoot $PackageRoot -NonInteractive
-  return $LASTEXITCODE
+  # Forward the child process log to the console without letting those output
+  # lines become part of this function's return value.  Callers compare the
+  # result numerically, so returning `log lines + exit code` makes a successful
+  # install look like a failure under PowerShell's pipeline semantics.
+  & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PackageRoot 'Install.ps1') -Mode $Mode -PackageRoot $PackageRoot -NonInteractive 2>&1 |
+    ForEach-Object { Write-Host $_ }
+  $exitCode = $LASTEXITCODE
+  return [int]$exitCode
 }
 
 function Get-KimiToken {
@@ -183,9 +189,10 @@ function Get-AcceptanceStages {
         if (-not (Test-Path -LiteralPath $profilePkg -PathType Leaf)) { throw 'PROFILE_MISSING：未找到 web profile' }
         $script:Acc.dshHome = $dshHome
         $script:Acc.baselineProfileHash = Get-FileSha256 $profilePkg
-        $zip = Get-ChildItem -LiteralPath (Join-Path $RepoRoot 'dist') -Filter 'dsh-turn-cost-setup-*.zip' -ErrorAction SilentlyContinue |
-          Sort-Object LastWriteTime -Descending | Select-Object -First 1
-        if ($null -eq $zip) { throw 'BUILD_FIRST：dist/ 没有 ZIP，请先运行 maintenance.ps1 build' }
+        $pkg = Read-AdapterJson 'package.json'
+        $zipPath = Join-Path $RepoRoot ('dist\dsh-turn-cost-setup-' + [string]$pkg.version + '-win-x64.zip')
+        $zip = Get-Item -LiteralPath $zipPath -ErrorAction SilentlyContinue
+        if ($null -eq $zip) { throw ('BUILD_FIRST：dist/ 没有当前版本 ' + [string]$pkg.version + ' 的 ZIP，请先运行 maintenance.ps1 build') }
         $script:Acc.zip = $zip.FullName
         return @{ status = 'PASS'; summary = ('前置通过；制品 ' + $zip.Name + '；安装前基线哈希已登记（不回显）'); code = $null }
       } },
@@ -223,6 +230,13 @@ function Get-AcceptanceStages {
         $deadline = [DateTime]::UtcNow.AddSeconds(40)
         do { Start-Sleep -Milliseconds 500 } while (-not (Test-PortOpen 3080) -and [DateTime]::UtcNow -lt $deadline)
         if (-not (Test-PortOpen 3080)) { throw 'DSH_START_FAILED：3080 未出现监听' }
+        # dsh.cmd/node shims may spawn the real server and exit, so the
+        # Start-Process handle is not a reliable lifecycle owner.  Precheck
+        # proved 3080 was free; the listener that just appeared belongs to this
+        # acceptance run and is the process we must stop later.
+        $listener = Get-NetTCPConnection -State Listen -LocalPort 3080 -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($null -eq $listener -or [int]$listener.OwningProcess -le 0) { throw 'DSH_START_FAILED：无法登记 3080 监听进程' }
+        $script:Acc.dshListenerPid = [int]$listener.OwningProcess
         return @{ status = 'PASS'; summary = ('启动成功；Kimi 由本链启动=' + $script:Acc.startedKimi); code = $null }
       } },
     @{ id = 'probe'; run = {
@@ -253,8 +267,8 @@ function Get-AcceptanceStages {
         return @{ status = 'PASS'; summary = ('DSH HTTP 200；Kimi meta/usage code=0；' + $blSummary); code = $null }
       } },
     @{ id = 'stop'; run = {
-        if ($null -ne $script:Acc.dshProcess -and -not $script:Acc.dshProcess.HasExited) {
-          Stop-Process -Id $script:Acc.dshProcess.Id -Force -ErrorAction SilentlyContinue
+        if ($null -ne $script:Acc.dshListenerPid) {
+          Stop-Process -Id $script:Acc.dshListenerPid -Force -ErrorAction SilentlyContinue
           $deadline = [DateTime]::UtcNow.AddSeconds(15)
           do { Start-Sleep -Milliseconds 300 } while ((Test-PortOpen 3080) -and [DateTime]::UtcNow -lt $deadline)
         }
@@ -295,9 +309,9 @@ function Invoke-AdapterCleanup {
   $problems = New-Object System.Collections.ArrayList
   # 第一步：停止本链拥有的 DSH 并确认 3080 释放（回滚前置要求端口空闲）
   try {
-    if ($null -ne $script:Acc.dshProcess -and -not $script:Acc.dshProcess.HasExited) {
+    if ($null -ne $script:Acc.dshListenerPid) {
       # DSH 无对外的优雅停止接口；该进程由本验收链启动（所有权明确），直接结束并核对端口释放
-      Stop-Process -Id $script:Acc.dshProcess.Id -Force -ErrorAction SilentlyContinue
+      Stop-Process -Id $script:Acc.dshListenerPid -Force -ErrorAction SilentlyContinue
       $deadline = [DateTime]::UtcNow.AddSeconds(15)
       do { Start-Sleep -Milliseconds 300 } while ((Test-PortOpen 3080) -and [DateTime]::UtcNow -lt $deadline)
       if (Test-PortOpen 3080) { [void]$problems.Add('DSH 进程已停但 3080 仍监听') }

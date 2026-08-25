@@ -98,7 +98,7 @@ test("official Kimi path resolves the managed credential and sends it only as Au
   assert.doesNotMatch(JSON.stringify(result), /local-fixture-key/);
 });
 
-test("Kimi quota fetch uses only the official loopback server token", async (t) => {
+test("Kimi quota fetch supports the optional loopback server token path", async (t) => {
   const dir = await mkdtemp(join(tmpdir(), "turn-cost-kimi-"));
   const tokenFile = join(dir, "server.token");
   await writeFile(tokenFile, "local-test-token\n");

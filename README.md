@@ -114,7 +114,7 @@ A [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (dsh) web 
 
 ### 方式一：Windows 一键包（推荐）
 
-1. 解压 `dsh-turn-cost-setup-0.4.0-win-x64.zip`，双击 `安装.cmd`；不要直接在 ZIP 预览器里运行。
+1. 解压 `dsh-turn-cost-setup-0.4.1-win-x64.zip`，双击 `安装.cmd`；不要直接在 ZIP 预览器里运行。
 2. 安装器会备份 web profile、安装固定插件包与隔离的 DSH/Kimi/百炼 CLI，并生成 `~/.dsh/turn-cost-launcher/启动 DSH（含额度）.cmd`。
 3. API Key 仍由你在 DSH「设置 → 模型」里手动输入；Kimi 官方 API 额度会复用 DSH 托管的 `KIMI_CODING_API_KEY`，无需另跑 `kimi login`（只有显式改用 loopback 时才需启动并登录 Kimi Code 本地服务）。Qwen 额度需 `bl auth login --console --console-site domestic`，并建议再用 `bl auth login --open-api` 保存 AK/SK 供 console token 自动续期。安装器本身不会读取或写入 `.credentials.yaml`。
 4. 日常从“启动 DSH（含额度）”启动；需要恢复时运行同目录的“回滚上一次安装”或“卸载”。
