@@ -2,14 +2,14 @@
 
 [![featured in awesome-dsh-plugin](https://img.shields.io/badge/awesome--dsh--plugin-featured-2ea44f)](https://github.com/beancookie/awesome-dsh-plugin)
 
-DeepSeek Harness（dsh）Web UI 插件：**按对话实际用的路由分流显示**——官方按量模型（DeepSeek）显示金额（¥），Kimi/阿里 Token Plan 订阅路由显示「本轮 token + 官方额度窗口已用/剩余比例」；另有会话级/跨对话汇总。
+DeepSeek Harness（dsh）Web UI 插件：**按对话实际用的路由分流显示**——官方按量模型（DeepSeek）显示金额（¥），Kimi 订阅显示「本轮 token + 5h 窗口剩余次数」，阿里 Token Plan 订阅显示「本轮 token + 7 天限额剩余比例」；另有会话级/跨对话汇总。
 
-A [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (dsh) web plugin that shows, per conversation and per turn, **which route the model actually used**: pay-as-you-go DeepSeek turns show money (¥), while Kimi / Alibaba Token Plan subscription turns show tokens plus official window used/remaining percentages; session-level and cross-session summaries round it out. Ships the [official DeepSeek CNY peak/off-peak rates](https://api-docs.deepseek.com/quick_start/pricing/) and accepts your own rate table.
+A [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (dsh) web plugin that shows, per conversation and per turn, **which route the model actually used**: pay-as-you-go DeepSeek turns show money (¥) while Kimi subscription turns show tokens plus the 5-hour window remaining count, and Alibaba Token Plan turns show tokens plus the 7-day quota remaining share; session-level and cross-session summaries round it out. Ships the [official DeepSeek CNY peak/off-peak rates](https://api-docs.deepseek.com/quick_start/pricing/) and accepts your own rate table.
 
-> 官方按量：本轮 ¥0.23 · 1.2万 token · 缓存读 98% ／ Kimi 订阅：本轮 12.3万 token · 5h 已用 12% · 剩余 88% ／ Qwen 订阅：本轮 3.4万 token · 剩余 40%
+> 官方按量：本轮 ¥0.23 · 1.2万 token · 缓存读 98% ／ Kimi 订阅：本轮 12.3万 token · 5h 还剩 47 次 ／ Qwen 订阅：本轮 3.4万 token · 剩余 40%
 
-- **订阅额度窗口（0.4.0）**：内置 `kimi-coding` 与 `qwen-token-plan-cn` 标准路由；Kimi 走官方 Kimi Code 本地 OAuth 服务读取 5 小时/7 天窗口与加油包，阿里 Token Plan 走官方 `bl usage token-plan` CLI
-- **不编造单轮额度归因**：官方接口只给账号窗口已用/剩余，不给某一轮的可靠扣减；Kimi 徽章显示当前 5h 窗口已用/剩余，阿里徽章显示当前剩余比例
+- **订阅额度窗口（0.4.0）**：Kimi 订阅走官方 `GET /coding/v1/usages` 端点读 5 小时/7 天窗口的已用/上限/剩余/重置时间与加油包余额（凭据取 `.credentials.yaml` 的 `KIMI_CODING_API_KEY`，打开即用；也可配 loopback baseUrl 走 Kimi Code 本地 OAuth）；阿里 Token Plan 走官方 `bl usage token-plan` CLI——见下文「订阅额度窗口」
+- **单对话/单轮占比**：Kimi 路由显示「本轮 token · 5h 还剩 N 次」（剩余次数为官方实时读数）；阿里侧因 Credits 无法精确归因，只显示剩余比例（不编造消耗百分比）
 - **人民币计价**，内置 [DeepSeek 官方定价](https://api-docs.deepseek.com/zh-cn/quick_start/pricing/)（峰谷按北京时间）——官方按量路由显示金额，订阅路由按 0 价登记只显 token
 - **自定义费率表**：任意模型可配单价（含缓存写），订阅制模型按 0 价登记只显 token
 - 金额基于 **provider 上报的真实 usage**（未缓存输入 / 缓存读 / 输出分桶计费），不是估算 token 数
@@ -31,27 +31,24 @@ A [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (dsh) web 
 ```
 
 ③ 会话页头动作行出现「额度汇总」按钮，点开面板看**订阅额度窗口**（Kimi 5h/7 天/加油包、阿里 Token Plan 7 天限额）与全部会话的合计、按模型分组、按天分组（近 14 天）。
-
-- 金额精确到分，不足半分显示 `<¥0.01`（仅官方按量路由显示金额；订阅路由只显 token 与额度占比）
+- 金额精确到分，不足半分显示 `<¥0.01`（仅官方按量路由显示金额；订阅路由只显 token 与额度读数）
 - token 数为总消耗（万为单位），口径与 dsh 官方统计条逐桶一致
 - 缓存读占比 = 缓存命中 token ÷（缓存命中 + 未命中输入），一眼看出长对话的省钱效果
 
 ## 订阅额度窗口（0.4.0）
 
-标准路由无需每台机器另配 `ratesPath`：插件默认启用 `kimi-coding → kimi-usages` 与 `qwen-token-plan-cn → aliyun-bl`。费率表 JSON 的 `quota` 块只用于覆盖默认值、增加其他路由或显式禁用：
+订阅路由**内置默认**（`kimi-coding` → kimi-usages、`qwen-token-plan-cn` → aliyun-bl），不写配置也会尝试读取；费率表 `quota` 块用于覆盖默认（如换凭据引用名、换端点、`enabled: false` 显式关闭）：
 
 ```json
 "quota": {
-  "kimi-coding": { "kind": "kimi-usages" },
-  "qwen-token-plan-cn": { "enabled": false }
+  "kimi-coding": { "kind": "kimi-usages", "credentialRef": "KIMI_CODING_API_KEY" },
+  "qwen-token-plan-cn": { "kind": "aliyun-bl", "command": "bl" }
 }
 ```
 
-上例保留 Kimi 默认读取，并关闭 Qwen 自动额度读取。合法自定义项覆盖默认项；畸形项不会擦除安全默认值。
-
-- **kimi-usages**：先安装并登录官方 Kimi Code CLI，运行 `kimi web --no-open`；插件只连接 `http://127.0.0.1:58627/api/v1/oauth/usage`，从 `~/.kimi-code/server.token` 读取本地 bearer（不回显）。可用 `baseUrl` 改 loopback 端口，但远程 URL 会被配置守卫拒绝；成功结果缓存 60 秒
-- **aliyun-bl**：调官方百炼 CLI `bl usage token-plan --output json`（先 `npm i -g bailian-cli` 并完成控制台登录；可用 `command` 改可执行名）。未安装/未登录/输出不认得都安静降级为「暂读不到」
-- **占比口径**：Kimi 本地服务返回的 `used/limit` 是账号额度刻度；请求次数与额度百分比不是同一量纲，插件不再计算“本轮/本会话消耗%”
+- **kimi-usages**：默认走官方 `GET https://api.kimi.com/coding/v1/usages`（Kimi Code 官方端点），凭据从 `<dsh-home>/.credentials.yaml` 的 `KIMI_CODING_API_KEY` 内存解析（可用 `credentialRef` 换引用名，`baseUrl` 换端点）；返回 5 小时/7 天窗口 + 加油包，host 端 60 秒 TTL 缓存。**打开即用，无需本地服务**。也可显式配 loopback `baseUrl`（如 `http://127.0.0.1:58627`）改走 Kimi Code 本地 OAuth 服务（读 `~/.kimi-code/server.token`）
+- **aliyun-bl**：调官方百炼 CLI `bl usage token-plan --output json`（`npm i -g bailian-cli` 后 `bl auth login --console` 登录一次；再用 `bl auth login --open-api --access-key-id <id> --access-key-secret <secret>` 存 AK/SK，console token 过期自动续期、免手动登录；可用 `command` 改可执行名）。未安装/未登录/输出不认得都安静降级为「暂读不到」
+- **占比口径**：Kimi 徽章与面板显**剩余次数**（官方实时读数，不把请求次数伪装成额度消耗）；「本会话占比」不再显示——5h 窗口按请求数计的旧口径（#6/#3）已在 0.4.0 移除
 - 阿里 Token Plan 以动态 Credits 计量且官方未公开系数表，**不做单对话占比**（不编造），只显示窗口「已用/还剩」
 
 平台读数失败的窗口在面板上显示「暂读不到（原因）」，永不阻塞界面。
@@ -95,11 +92,11 @@ A [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (dsh) web 
 
 ## 隐私
 
-**只读本机数据；Kimi 额度只访问 loopback 官方服务，阿里额度由本机官方 CLI 访问其服务。**
+**只读本机数据；Kimi 额度默认只读访问官方 `api.kimi.com`，也可显式改用 loopback 官方服务；阿里额度由本机官方 CLI 访问其服务。**
 
 - token 账与金额来自本机 dsh 会话日志与本机费率表 JSON，不出本机
-- 0.4.0 起标准额度路由默认启用：Kimi 路由只访问 `127.0.0.1`/ `localhost` 的官方 Kimi Code Server，由该服务持有 OAuth 与上游通信；阿里路由由本机官方 `bl` CLI 与其控制台会话通信
-- 插件不再读取 Kimi 模型 API key；本地 server token 只用于 loopback 请求，**不打印、不进入 Remote 响应**
+- 0.4.0 起订阅路由默认启用：Kimi 路由会向 `api.kimi.com`（或你自配的 https/loopback baseUrl）发只读 `GET /usages`；阿里路由由本机官方 `bl` CLI 与其控制台会话通信——除此之外无任何网络访问、无任何上报
+- 订阅 API 密钥只在内存里从 dsh 自己的受管凭据库（`.credentials.yaml`）解析后用于上述请求，**不打印、不落盘、不转发给任何第三方**
 - 界面上的金额是**估计值**（provider 上报 token 数 × 费率表单价），仅供个人参考，不构成账单；订阅套餐的实际额度以平台官方读数为准
 
 ## 计费口径与边界
@@ -119,7 +116,7 @@ A [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (dsh) web 
 
 1. 解压 `dsh-turn-cost-setup-0.4.0-win-x64.zip`，双击 `安装.cmd`；不要直接在 ZIP 预览器里运行。
 2. 安装器会备份 web profile、安装固定插件包与隔离的 DSH/Kimi/百炼 CLI，并生成 `~/.dsh/turn-cost-launcher/启动 DSH（含额度）.cmd`。
-3. API Key 仍由你在 DSH「设置 → 模型」里手动输入；Kimi 额度另需 `kimi login`，Qwen 额度另需 `bl auth login --console --console-site domestic`。安装器不会读取或写入 `.credentials.yaml`。
+3. API Key 仍由你在 DSH「设置 → 模型」里手动输入；Kimi 官方 API 额度会复用 DSH 托管的 `KIMI_CODING_API_KEY`，无需另跑 `kimi login`（只有显式改用 loopback 时才需启动并登录 Kimi Code 本地服务）。Qwen 额度需 `bl auth login --console --console-site domestic`，并建议再用 `bl auth login --open-api` 保存 AK/SK 供 console token 自动续期。安装器本身不会读取或写入 `.credentials.yaml`。
 4. 日常从“启动 DSH（含额度）”启动；需要恢复时运行同目录的“回滚上一次安装”或“卸载”。
 
 安装器不需要管理员权限，不改全局 npm、代理、防火墙、系统执行策略或开机任务。完整说明见 ZIP 内 `README-安装说明.txt`。

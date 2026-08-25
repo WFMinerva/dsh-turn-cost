@@ -35,11 +35,11 @@
   "quota": {
     "kimi-coding": {
       "kind": "kimi-usages",
-      "_note": "0.4.0 已内置此路由；这里只演示覆盖。先运行 kimi web --no-open；可用 baseUrl 改本地端口"
+      "_note": "Kimi 订阅窗口：默认走官方 API GET https://api.kimi.com/coding/v1/usages，凭据取 .credentials.yaml 的 KIMI_CODING_API_KEY（打开即用）；credentialRef 可改名，baseUrl 可换端点（loopback http://127.0.0.1:58627 走本地 OAuth）"
     },
     "qwen-token-plan-cn": {
       "kind": "aliyun-bl",
-      "_note": "0.4.0 已内置此路由；这里只演示覆盖。调官方 bl CLI 并登录；可用 command 改可执行名"
+      "_note": "阿里 Token Plan：调官方 bl CLI（npm i -g bailian-cli；bl auth login --console 一次 + --open-api 存 AK/SK 自动续期）；可用 command 改可执行名"
     }
   }
 }

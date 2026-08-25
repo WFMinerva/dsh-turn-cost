@@ -11,11 +11,12 @@ import { normalizeAliyunBl, normalizeKimiLocalUsage } from "../lib/quota.js";
 
 const fixture = JSON.parse(readFileSync(new URL("./fixtures/three-routes.json", import.meta.url), "utf8"));
 
-test("Aliyun CLI execution never enables child-process shell mode", () => {
+test("host keeps Aliyun shell mode disabled and includes both Kimi credential paths", () => {
   const hostSource = readFileSync(new URL("../lib/index.js", import.meta.url), "utf8");
   assert.doesNotMatch(hostSource, /shell\s*:\s*true/);
   assert.match(hostSource, /\/api\/v1\/oauth\/usage/);
-  assert.doesNotMatch(hostSource, /api\.kimi\.com\/coding\/v1\/usages|\.credentials\.yaml/);
+  assert.match(hostSource, /api\.kimi\.com\/coding\/v1/);
+  assert.match(hostSource, /\.credentials\.yaml/);
 });
 
 for (const route of fixture.routes) {
@@ -62,6 +63,39 @@ test("official local Kimi OAuth usage normalizes 5h/weekly windows and booster",
   assert.equal(normalized.windows.find((window) => window.name === "7d")?.remaining, 66);
   assert.equal(normalized.booster.balanceCny, 28.79);
   assert.equal(normalizeKimiLocalUsage({ data: { kind: "error", message: "secret" } }), null);
+});
+
+test("official Kimi path resolves the managed credential and sends it only as Authorization", { concurrency: false }, async (t) => {
+  const dir = await mkdtemp(join(tmpdir(), "turn-cost-kimi-official-"));
+  const credentialsFile = join(dir, ".credentials.yaml");
+  await writeFile(credentialsFile, "refs:\n  KIMI_CODING_API_KEY: local-fixture-key\n");
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url, options) => {
+    assert.equal(url, "https://api.kimi.com/coding/v1/usages");
+    assert.equal(options.headers.Authorization, "Bearer local-fixture-key");
+    return {
+      ok: true,
+      json: async () => ({
+        usage: { limit: "100", used: "34", remaining: "66", resetTime: "2030-01-08T00:00:00.000Z" },
+        limits: [{
+          window: { duration: 300, timeUnit: "TIME_UNIT_MINUTE" },
+          detail: { limit: "100", used: "7", remaining: "93", resetTime: "2030-01-01T05:00:00.000Z" },
+        }],
+      }),
+    };
+  };
+  t.after(async () => {
+    globalThis.fetch = originalFetch;
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  const result = await TurnCostService.prototype.fetchKimiQuota.call(
+    { credentialsFile },
+    { kind: "kimi-usages" },
+  );
+  assert.equal(result.ok, true);
+  assert.equal(result.windows.find((window) => window.name === "5h")?.remaining, 93);
+  assert.doesNotMatch(JSON.stringify(result), /local-fixture-key/);
 });
 
 test("Kimi quota fetch uses only the official loopback server token", async (t) => {

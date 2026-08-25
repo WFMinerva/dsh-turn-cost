@@ -316,9 +316,9 @@ test("quotaConfigOf: quota routes validated; absent blocks → empty table", () 
       "qwen-token-plan-cn": { kind: "aliyun-bl", command: "bl" },
       "bad-kind": { kind: "nonsense" },            // unknown kind — skipped
       "not-object": "nope",                        // malformed — skipped
-      "obsolete-ref": { kind: "kimi-usages", credentialRef: "KIMI_CODING_API_KEY" }, // old field ignored
-      "remote-base": { kind: "kimi-usages", baseUrl: "https://api.kimi.com/coding/v1" }, // loopback only
-      "foreign-http": { kind: "kimi-usages", baseUrl: "http://192.0.2.1:58627" }, // loopback only
+      "official-ref": { kind: "kimi-usages", credentialRef: "KIMI_CODING_API_KEY" }, // official API credential accepted
+      "remote-base": { kind: "kimi-usages", baseUrl: "https://api.kimi.com/coding/v1" }, // HTTPS accepted
+      "foreign-http": { kind: "kimi-usages", baseUrl: "http://192.0.2.1:58627" }, // non-loopback HTTP rejected
       "evil-cmd": { kind: "aliyun-bl", command: "bl && echo pwned" },  // shell metacharacters rejected
       "nested-cmd": { kind: "aliyun-bl", command: "cmd /c echo NESTED" }, // arguments rejected
       "path-cmd": { kind: "aliyun-bl", command: "C:\\Program Files\\bl.cmd" }, // paths rejected
@@ -328,8 +328,8 @@ test("quotaConfigOf: quota routes validated; absent blocks → empty table", () 
   assert.deepEqual(quota["qwen-token-plan-cn"], { kind: "aliyun-bl", command: "bl" });
   assert.equal(Object.hasOwn(quota, "bad-kind"), false);
   assert.equal(Object.hasOwn(quota, "not-object"), false);
-  assert.deepEqual(quota["obsolete-ref"], { kind: "kimi-usages" });
-  assert.deepEqual(quota["remote-base"], { kind: "kimi-usages" });
+  assert.deepEqual(quota["official-ref"], { kind: "kimi-usages", credentialRef: "KIMI_CODING_API_KEY" });
+  assert.deepEqual(quota["remote-base"], { kind: "kimi-usages", baseUrl: "https://api.kimi.com/coding/v1" });
   assert.deepEqual(quota["foreign-http"], { kind: "kimi-usages" });
   assert.deepEqual(quota["evil-cmd"], { kind: "aliyun-bl" }); // command dropped, route kept
   assert.deepEqual(quota["nested-cmd"], { kind: "aliyun-bl" });
@@ -361,4 +361,16 @@ test("mergeQuotaRoutes: valid overrides win and enabled=false opts out", () => {
     "kimi-coding": { kind: "kimi-usages", baseUrl: "http://localhost:58628" },
     private: { kind: "aliyun-bl", command: "bl-private" },
   });
+});
+
+test("quotaConfigOf: kimi route accepts both official-API and loopback credential paths", () => {
+  // Official coding API: https baseUrl + credentialRef (open-the-GUI path).
+  const official = quotaConfigOf({ quota: { "kimi-coding": { kind: "kimi-usages", credentialRef: "KIMI_CODING_API_KEY", baseUrl: "https://api.kimi.com/coding/v1" } } });
+  assert.deepEqual(official["kimi-coding"], { kind: "kimi-usages", credentialRef: "KIMI_CODING_API_KEY", baseUrl: "https://api.kimi.com/coding/v1" });
+  // Loopback OAuth server: loopback baseUrl only (no credentialRef).
+  const loopback = quotaConfigOf({ quota: { "kimi-coding": { kind: "kimi-usages", baseUrl: "http://127.0.0.1:58627" } } });
+  assert.deepEqual(loopback["kimi-coding"], { kind: "kimi-usages", baseUrl: "http://127.0.0.1:58627" });
+  // Plain http that is not loopback is rejected; route survives without baseUrl.
+  const insecure = quotaConfigOf({ quota: { "kimi-coding": { kind: "kimi-usages", baseUrl: "http://insecure.example" } } });
+  assert.deepEqual(insecure["kimi-coding"], { kind: "kimi-usages" });
 });

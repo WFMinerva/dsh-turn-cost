@@ -86,8 +86,8 @@ test("real client badge selects Kimi 5h data for kimi-coding", () => {
   );
   assert.match(view.props.title, /^badge\.quotaTitle/);
   assert.match(view.props.children, /^badge\.quota /);
-  assert.match(view.props.children, /"used":"20%"/);
-  assert.match(view.props.children, /"remaining":"80%"/);
+  assert.doesNotMatch(view.props.children, /"used":/);
+  assert.match(view.props.children, /"remaining":80/);
 });
 
 for (const provider of ["qwen-token-plan-cn", "qwen-token-plan"]) {
