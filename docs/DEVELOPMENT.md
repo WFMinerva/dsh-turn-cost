@@ -8,9 +8,17 @@
 |---|---|---|
 | `lib/fold.js` | 纯计费核心：zstd 日志解帧、按 (轮,步) 折叠 usage、峰谷计价 | **零依赖**，可直接被 node 单测；所有金额口径都在这里 |
 | `lib/index.js` | host 端服务：`TurnCostService`，Typert Remote 端点 `turnCost/query` | 顶部 `__esDecorate` 是手工转译的 stage-3 装饰器，**不要删** |
+| `lib/quota.js` | host/client 测试共享的额度响应纯规范化函数 | 包内部测试接缝，未加入 `package.json` 的 `exports`，不改变公开 API |
 | `lib/client.js` | 浏览器 bundle：`assistant-actions` 槽位里的灰色金额行 | 手工写的 `window.__ModuleLoader__` CJS 格式，**不需要打包器** |
 | `cordis.patch.yml` | bundle patch：往 profile 插入一行 `turn-cost` | 用户层可用同 id 覆盖（用户层后应用、同 id 行胜出） |
 | `test/fold.test.mjs` | `fold.js` 的纯函数单测 | `node --test test/` 运行，无网络无依赖 |
+| `installer/` | Windows 一键安装、启动、回滚、卸载与固定 CLI lockfile | PowerShell 5.1 脚本必须保留 UTF-8 BOM；不得读写 `.credentials.yaml` |
+| `scripts/build-windows-installer.ps1` | 运行测试、`npm pack`、生成内容哈希并组装 ZIP | 版本只读 `versions.json`+`package.json`；ZIP 为确定性组装；`-ReproducibilityCheck` 跑双构建整包哈希相等测试；`dist/` 为构建产物，不入库 |
+| `test/windows-installer.test.ps1` | 临时 `DSH_HOME` 的事务/所有权回归 | 必须在 Windows PowerShell 5.1 下运行；端口注入（`DTC_PORT_CHECK_OVERRIDE`，finally 清除）隔离宿主 3080，无需关闭 DSH |
+| `versions.json` | 部署固定项唯一权威源（DSH/Kimi/百炼 CLI、providers、node 期望） | 插件版本不在此（唯一权威在 `package.json`）；改 CLI 固定版本只改这里再跑 `sync-versions` |
+| `maintenance.ps1` + `maintenance/` | 统一维护入口（薄路由）+ 项目适配层（verify/build/acceptance/doctor/sync-versions 钩子） | 核心逻辑在 `vendor/maintenance/`，禁止手改；诊断表 `maintenance/diagnostic-table.md` |
+| `vendor/maintenance/` + `vendor/manifest.json` | tool-library 通用层快照 + 来源 commit/哈希清单 | 由 tool-library `publish-vendor` 从干净提交发布；`verify` 逐项哈希互校，手改即 FAIL |
+| `evidence/` | 版本化验收证据（脱敏后显式复制） | 原始 `acceptance-report.json` 在 `.gitignore`，不入库；示例 `example-report.json` 为虚构数据 |
 | `package.json` | 双重身份：npm 包清单 + DSH bundle 清单（`dsh` 字段） | `files` 白名单只有 `lib` 和 `cordis.patch.yml`；docs/test 只进 GitHub 不进 npm（有意为之） |
 
 ## 二、DSH 插件机制（本插件踩过的关键点）
@@ -87,7 +95,21 @@ DeepSeek 调价（官网定价页变化）时：
 - 验证 UI：重启 DSH web，刷新 http://127.0.0.1:3080，看每条 AI 回复下方的灰色金额行
 
 ```bash
-node --test              # 纯函数单测，秒级（默认 glob 自动匹配 test/*.test.mjs）
+node --version            # CI 固定 v24.18.0（Node 24 主版本）
+npm --version             # lockfile 生成与 CI 固定 11.16.0
+npm ci --ignore-scripts --no-audit --no-fund # CI 与本地完全相同的锁定安装命令
+node --test test/package-manifest-contract.test.mjs
+node --test test/host-config.test.mjs
+node --test test/config-source-rule.test.mjs
+node --test test/route-fixtures.test.mjs
+node --test test/client-quota.test.mjs
+node --test                # 全量测试（默认 glob 自动匹配 test/*.test.mjs）
+node --check lib/index.js
+node --check lib/client.js
+node --check lib/fold.js
+node --check lib/quota.js
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\test\windows-installer.test.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\build-windows-installer.ps1
 ```
 
 用真实日志抽查（node 一行脚本）：读某会话的 `session.jsonl.zstd` → `readSessionSamples("<sessions根目录>", "<sessionId>")` → `costOfTurn(samples, 轮号)`，核对 token 数与金额。
@@ -121,9 +143,9 @@ node --test              # 纯函数单测，秒级（默认 glob 自动匹配 t
 16. **为什么读数条的 token 口径可以直接对比官方统计条？** 官方 `tokenUsage` 投影的 `uncachedInputTokens` 就是 provider 上报的 `usage.inputTokens`（dsh-client-connection `tokenUsageOf` 实现），与 fold.js 的 `inputTokens` 桶同源；0.2.0 实测 5 个真实会话逐桶 MATCH。
 17. **为什么「还剩多少」读平台端点、且不显示「本对话占比」？**（0.3.0 门二 v2 → 0.4.0 改口径）0.3.0 曾按请求数算「本会话占比」（本地日志里落在当前窗口的调用数 ÷ 窗口上限），但该占比是**估计值**（DSH 日志调用步数与平台计费请求数非严格 1:1，SDK 重试/缓存命中/续接重放的步可能不被计作新请求），且与官方 used 读数对不上（实测本地 62 次 vs 官方 53）。0.4.0 起**移除占比显示**，只显官方实时剩余次数/比例；剩余必须取平台实时值——同一池子还被 Kimi CLI/桌面端消耗，本地日志看不见它们。端点成功 60s TTL 缓存、失败 10s 防打爆。
 18. **为什么阿里 Token Plan 不做单对话占比？** Credits 按模型分档动态抵扣（思考模式/工具调用影响），官方无公开系数表、明说「以控制台为准」，且实测 qwen 路由日志 usage 只有 token 四桶、无 Credits 字段——精确归因不可得，门二 v2 拍板不做（不编造），只显示窗口已用/剩余。
-19. **为什么凭据从 `.credentials.yaml` 行解析，而不是 inject dsh-credentials 服务？** 该 seam 是 provider 抽象（`CredentialProvider.resolve`），没有暴露给第三方插件的公共解析服务；`.credentials.yaml` 是 dsh-home 内受管文件、host 插件本就有读权限；行解析器只认 `refs:` 块的 `NAME: value`（`^[A-Z][A-Z0-9_]*$`），值只在内存用于额度请求，永不打印落盘。
+19. **为什么额度插件不读 `.credentials.yaml`？**（0.4.2 纠错）DSH 中的 Kimi/Qwen API Key 是模型调用凭据，不等于套餐额度凭据。Kimi 额度由 Kimi Code OAuth loopback 提供，Qwen 额度由百炼 CLI 的控制台 OAuth 提供；插件不得解析、复制或重用模型 Key。
 20. **为什么金额不设全局开关、而是按路由分流？**（0.3.0 门三修正）最初门二 v2 拍「金额默认隐藏可配置」，但机主实测发现这会把官方按量 DeepSeek 的金额也藏掉（那是 0.1.3 起就在的正确功能）。修正后：金额跟随「该轮 provider 是否按量计费」——官方按量路由 `cost>0` 即显示 ¥；订阅路由 0 价登记 → 只显 token + 额度读数。不要再引入会覆盖官方按量金额的全局开关。
-21. **为什么 Kimi 额度取数有「官方 API / loopback OAuth」两条路？**（0.4.0）官方 coding API（`GET https://api.kimi.com/coding/v1/usages` + `.credentials.yaml` 的 `KIMI_CODING_API_KEY`）打开即用、无需本地服务，是默认路径；loopback OAuth（`~/.kimi-code/server.token` + `127.0.0.1:58627`）需要 Kimi Code 本地服务在跑，仅当费率表显式配了 loopback `baseUrl` 才走。baseUrl 白名单：https 任意，或 loopback http；裸 http 拒绝。
+21. **为什么 Kimi 额度只保留 loopback OAuth？**（0.4.2）双机实测证明模型 API Key 可以完成推理，却不能可靠读取套餐额度；此前把一次特定凭据的直连成功推广为通用默认是错误判断。唯一受支持的额度路径是 `~/.kimi-code/server.token` + `127.0.0.1:58627/api/v1/oauth/usage`。配置守卫只接受 loopback HTTP，远程 HTTPS、外部 HTTP host 与旧 `credentialRef` 都丢弃。
 
 ## 七、0.2.0 新增件的维护要点
 
@@ -133,4 +155,4 @@ node --test              # 纯函数单测，秒级（默认 glob 自动匹配 t
 - **单测里的临时目录**：Windows 上首次 `mkdtemp`+写删可能触发杀软扫描（首跑 ~36s，之后 <100ms），属环境噪声不是回归。
 - **host 端改动需重启 dsh web 生效**（web profile 禁用 host 插件 HMR）；client bundle（client.js）覆盖到 profile 后由常驻 HMR 热更新（rev 变化触发，React 状态不保留）。
 - **Config/schema 只能用 schemastery 语法**：`z` 是 `@deepseek-ai/schemastery` 不是 zod——对象字段缺省即可选，**没有 `.optional()`/`.nullable()`/`.parse()` 这些 zod 链式方法**；误用会在插件 import 阶段静态初始化器抛错，cordis 整树拒载、**dsh web 启动直接崩**（2026-08-24 实锤，见方案文档变更记录 #4）。改 Config 后必须真实启动一次 dsh web 验证——单测覆盖不到 host 侧。
-- **quota 端点（0.3.0 起，0.4.0 双路径）**：`turnCost/quota` 平台读数 TTL 缓存（成功 60s / 失败 10s）；Kimi 路由按 baseUrl 分流——https（默认）走官方 `GET /usages`（`normalizeKimiUsages`：加油包 1e-8 CNY、月度 cents，已与 2026-08-22/08-25 快照交叉验证 ¥28.79/¥871.21/¥1000），loopback 走 `GET /api/v1/oauth/usage`（`normalizeKimiLocalUsage`）；`normalizeAliyunBl` 在 bl CLI 真实输出未实锤前接受多种键名拼写（total/TotalValue、remaining/TotalSurplusValue…），全不认得就降级 `bl-output-unrecognized` 并带 300 字符 raw 摘录。错误码：`kimi-credential-not-found`/`kimi-api-unavailable`/`kimi-server-token-not-found`/`kimi-server-unavailable`/`kimi-output-unrecognized`/`bl-not-found`/`bl-failed`/`bl-output-not-json`/`bl-output-unrecognized`。
+- **quota 端点（0.4.2）**：`turnCost/quota` 平台读数 TTL 缓存（成功 60s / 失败 10s）；Kimi 只走 loopback `GET /api/v1/oauth/usage`（`normalizeKimiLocalUsage`），阿里走固定参数的 `bl usage token-plan --output json`（`normalizeAliyunBl`）。稳定错误码为 `kimi-server-token-not-found`/`kimi-server-unavailable`/`kimi-output-unrecognized`/`bl-not-found`/`bl-failed`/`bl-output-not-json`/`bl-output-unrecognized`。

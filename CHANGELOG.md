@@ -2,6 +2,28 @@
 
 本文件按 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 维护，版本号遵循语义化版本。
 
+## [0.4.2] - 2026-08-25
+
+### Fixed
+
+- **纠正 0.4.0/0.4.1 的 Kimi 额度凭据判断**：模型 API Key 只负责模型调用，不能作为可靠的套餐额度凭据；Kimi 额度恢复为已经在单位机和家用机分别实测通过的 Kimi Code OAuth loopback 路线（`127.0.0.1:58627`）。
+- 删除 host 对 DSH `.credentials.yaml` 的额度读取与远程 HTTPS Kimi quota 路径；`kimi-usages` 只接受 loopback `baseUrl`，内置默认显式固定为 `http://127.0.0.1:58627`。
+- 日常启动器恢复 Kimi 服务生命周期管理：启动前检查 OAuth token、拒绝占用 58627 的非 Kimi 服务、验证 `/api/v1/meta` 身份，并只关闭本启动器创建的实例。
+- 新增“配置额度登录”入口，顺序调用官方 `kimi login` 与 `bl auth login --console --console-site domestic`；不接收、复制或记录 API Key、AK/SK。
+
+### Security
+
+- 安装器仍不读取或修改 DSH `.credentials.yaml`；Kimi loopback bearer 只在启动器/插件进程内用于本机官方服务认证，不写入报告或仓库。
+
+## [0.4.1] - 2026-08-25
+
+### Fixed
+
+- Windows 候选包改用内容寻址 tgz 文件名，并在迁移时保留旧 tgz，避免 profile 的既有 `file:` 依赖在包目录切换期间断链。
+- 修复同版本候选被 pnpm 复用旧 `node_modules` 的问题：正式修正版升为 0.4.1，遵守版本不可变原则，确保官方 Kimi API 默认链实际部署。
+- 日常启动器不再强制启动/登录 Kimi loopback 服务；默认直接启动 DSH，只有显式配置 loopback 的用户自行管理该可选服务。
+- 修复维护验收器把子进程正常日志误当退出码，以及 DSH shim 退出后未能停止真实 3080 监听进程的问题。
+
 ## [0.4.0] - 2026-08-25
 
 ### Changed
@@ -16,14 +38,40 @@
 
 - 一键安装包 `Install.ps1` 启动即崩（cmd `\"` 转义 + PS 5.1 默认参数坑）——`安装.cmd` 传 `-PackageRoot "%~dp0."`，`Install.ps1` param 后补兜底（变更记录 #7）
 
+### Added
+
+- 统一维护入口 `maintenance.ps1`（通用层来自 tool-library，vendor 快照随仓库提交、哈希防漂移）：`verify` 确定性静态门禁（单测/合同/PS 语法+BOM/versions 相等/安装事务夹具）、`build`（确定性 ZIP + `-ReproducibilityCheck` 双构建整包哈希相等测试）、`acceptance` 实机验收链（安装→幂等重跑→启动→三路探测→退出→端口残留→回滚哈希核对→再安装，原始报告脱敏且不入库）、`doctor` 只读体检、`sync-versions`（bundled pnpm 重生成 lockfile）。
+- `versions.json`：部署固定项唯一权威源；`installer/dsh-package.json`、`installer/tools-package.json` 为派生文件（合同测试断言全链相等）；插件版本唯一权威仍在 `package.json`。
+- 夹具端口注入：安装事务夹具不再依赖宿主 3080 状态，守卫本身成为被测对象；生产默认仍检查真实端口。
+- `maintenance/diagnostic-table.md` 固定错误码诊断表与 `evidence/example-report.json` 示例报告（虚构数据）。
+
+## 0.4.0 候选阶段记录 - 2026-08-24
+
+### Added
+
+- Windows 一键部署 ZIP：事务备份、固定 DSH/Kimi/百炼 CLI、安装/启动/补齐 CLI/回滚/卸载入口，以及逐文件 SHA-256 内容清单。
+- `kimi-coding` 与 `qwen-token-plan-cn` 内置额度路由；自定义路由可覆盖，`enabled: false` 可显式退出。
+- Windows 临时 `DSH_HOME` 安装器夹具与 CI 门禁，覆盖幂等、永久载荷路径、篡改拒绝、失败回滚、凭据/settings 不变和卸载所有权。
+
+### Changed
+
+- 插件版本升至 0.4.0；安装器固定 DSH `0.1.1-rc.2`、Kimi Code `0.38.0`、百炼 CLI `1.17.0`，均使用 lockfile。
+- Kimi 服务由专用启动器按需启动；仅关闭本启动器创建的实例，且官方 shutdown 请求使用 JSON content type/body。
+
+### Fixed
+
+- 避免 profile 依赖指向临时解压目录；安装前先把完整载荷原子固化到 `~/.dsh/turn-cost-installer-package`。
+- 收紧同哈希幂等判断，防止回滚到旧插件后仅凭 bundle 名误判已安装。
+- pnpm 11 使用 `allowBuilds` 明确批准 DSH 必需的五个构建依赖；PowerShell 5.1 脚本统一 UTF-8 BOM。
+
 ## [0.3.0] - 2026-08-24
 
 ### Added
 
-- **订阅额度窗口显示（门二 v2 五拍落地）**：新端点 `turnCost/quota`——Kimi 订阅路由经官方 `GET {baseUrl}/usages` 读 5 小时/7 天窗口的 used/limit/remaining/resetTime 与加油包余额（实测 200，凭据内存解析自 `.credentials.yaml`，永不落盘打印）；阿里 Token Plan 路由调官方 `bl usage token-plan --output json`（未装/未登录/输出不认得均安静降级）
-- **按路由分流显示**：每轮徽章按该轮实际 provider 分流——官方按量（DeepSeek）显示 ¥ 金额；`kimi-coding` 显示「本轮 token · 5h 额度消耗 X% · 剩余 Y%」（消耗% = 该轮请求数 ÷ 5h 窗口上限）；`qwen-token-plan-cn` 显示「本轮 token · 剩余 Y%」（Credits 无法精确归因，不编造消耗%）
+- **订阅额度窗口显示（门二 v2 五拍落地）**：新端点 `turnCost/quota`——Kimi 订阅路由经官方 Kimi Code loopback OAuth Server 读取 5 小时/7 天窗口与加油包余额；阿里 Token Plan 路由调官方 `bl usage token-plan --output json`（未运行/未登录/输出不认得均安静降级）
+- **按路由分流显示**：每轮徽章按该轮实际 provider 分流——官方按量（DeepSeek）显示 ¥ 金额；`kimi-coding` 显示「本轮 token · 5h 已用 X% · 剩余 Y%」；`qwen-token-plan-cn` 显示「本轮 token · 剩余 Y%」
 - **模型名随对话显示**：会话读数条前缀模型名（读自对话日志，不跟当前 harness 预设）
-- 费率表新增可选 `quota` 顶层块（`quotaConfigOf` 解析，畸形/原型名键守卫）；汇总面板新增「订阅额度窗口」区；fold.js 新 `requestsInWindow`（窗口内按 provider 计请求数）
+- 费率表新增可选 `quota` 顶层块（`quotaConfigOf` 解析，畸形/原型名键守卫）；汇总面板新增「订阅额度窗口」区
 
 ### Changed
 

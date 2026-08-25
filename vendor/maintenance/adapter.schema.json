@@ -1,0 +1,44 @@
+{
+  "title": "maintenance adapter contract",
+  "description": "适配层（maintenance/adapter.ps1）必须/可选实现的钩子。通用层 core.ps1 点源加载后按命令调用。钩子只允许返回白名单形状；不得把 stdout/stderr 原文塞进 summary。",
+  "repo_root_note": "适配层代码与 core 共享脚本作用域，$RepoRoot 为适配仓库根。",
+  "required_hooks": [
+    {
+      "name": "Get-AdapterInfo",
+      "commands": ["acceptance", "doctor"],
+      "returns": "[pscustomobject]@{ name = '<项目名>'; version = '<版本>' }"
+    },
+    {
+      "name": "Get-VerifySteps",
+      "commands": ["verify", "build"],
+      "returns": "@( @{ id = '<步骤id>'; run = { <scriptblock> } } )；scriptblock 返回 [pscustomobject]@{ status='PASS|WARN|SKIP'; summary='一行' } 或抛出（异常消息以 SKIP:/WARN: 开头则记为对应档，否则记 FAIL）"
+    },
+    {
+      "name": "Invoke-AdapterBuild",
+      "commands": ["build"],
+      "params": "-ReproducibilityCheck 开关",
+      "returns": "无（失败抛出）；构建产物放仓库内（gitignored 目录）"
+    },
+    {
+      "name": "Get-Artifacts",
+      "commands": ["build"],
+      "returns": "@('<仓库相对路径>') 制品清单，由通用层计算哈希"
+    },
+    {
+      "name": "Get-AcceptanceStages",
+      "commands": ["acceptance"],
+      "returns": "@( @{ id = '<阶段id>'; run = { ... } } ) 按序执行；每个 run 返回 @{ status='PASS|WARN|FAIL|SKIP'; summary='一行'; code='<固定错误码或空>' }"
+    },
+    {
+      "name": "Invoke-AdapterCleanup",
+      "commands": ["acceptance"],
+      "note": "在 finally 中必然执行，必须幂等；只处理本次验收拥有的进程与状态；失败抛异常（通用层记 CLEANUP_FAILED）",
+      "returns": "@{ status='PASS|WARN|FAIL'; summary='一行' }"
+    }
+  ],
+  "optional_hooks": [
+    { "name": "Get-DoctorSteps", "commands": ["doctor"], "returns": "同 Get-VerifySteps 形状" },
+    { "name": "Get-SelfTestSteps", "commands": ["selftest（vendor 模式）"], "returns": "同 Get-VerifySteps 形状" },
+    { "name": "Invoke-SyncVersions", "commands": ["sync-versions"], "params": "-PnpmCmd <bundled pnpm 路径> -NodeExe <node 路径>；禁止改用全局 PATH 的 pnpm", "returns": "无（失败抛出）" }
+  ]
+}

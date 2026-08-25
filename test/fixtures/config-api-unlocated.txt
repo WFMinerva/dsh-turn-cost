@@ -1,0 +1,5 @@
+import { z } from "@deepseek-ai/schemastery";
+
+// A future refactor that aliases or relocates Config must not silently disable
+// the Schemastery-specific static guard.
+const Config = z.object({ ratesPath: z.string() });

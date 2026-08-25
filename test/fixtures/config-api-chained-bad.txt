@@ -1,0 +1,7 @@
+import z from "@deepseek-ai/schemastery";
+
+class ChainedBadConfig {
+  static Config = z.object({ ratesPath: z.string() }).optional();
+}
+
+void ChainedBadConfig;

@@ -1,0 +1,9 @@
+{
+    "_generated":  "由 versions.json 经 maintenance.ps1 sync-versions 生成，勿手改（合同测试断言相等）",
+    "name":  "dsh-turn-cost-private-dsh",
+    "version":  "1.0.0",
+    "private":  true,
+    "dependencies":  {
+                         "@deepseek-ai/dsh":  "0.1.1-rc.2"
+                     }
+}
