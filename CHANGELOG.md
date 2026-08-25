@@ -2,7 +2,19 @@
 
 本文件按 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 维护，版本号遵循语义化版本。
 
-## [Unreleased]
+## [0.4.0] - 2026-08-25
+
+### Changed
+
+- **Kimi 额度取数双路径**：`kimi-usages` 路由默认走官方 coding API `GET https://api.kimi.com/coding/v1/usages`（凭据从 `.credentials.yaml` 的 `KIMI_CODING_API_KEY` 内存解析，打开即用、无需本地服务）；也可显式配 loopback `baseUrl` 走 Kimi Code 本地 OAuth 服务（`~/.kimi-code/server.token`）。错误码细分为 credential/api/server/output 四类（变更记录 #9）
+- **Kimi 徽章口径**：剩余次数直接显示官方读数，不再 ÷limit 换算百分比（5h used=53/remaining=47 直接显「还剩 47 次」，不显 47%）；会话行与汇总面板同步次数口径（变更记录 #8）
+- **订阅路由内置**：`kimi-coding` / `qwen-token-plan-cn` 内置默认路由（`builtinQuotaRoutes`），不写 `quota` 块也会尝试读取；费率表 `quota` 块用于覆盖（`credentialRef`/`baseUrl`/`command`/`enabled:false` 关闭）
+- `quota.js` 从部署副本入库（`normalizeKimiUsages` / `normalizeKimiLocalUsage` / `normalizeAliyunBl` 三解析器）；`test/quota.test.mjs` 新增 5 项，`test/fold.test.mjs` 新增双路径配置用例（31/31）
+- 阿里 Token Plan 仍走官方 `bl usage token-plan` CLI：配一次 `bl auth login --console` + `--open-api`（存 AK/SK）后 console token 自动续期，免手动登录
+
+### Fixed
+
+- 一键安装包 `Install.ps1` 启动即崩（cmd `\"` 转义 + PS 5.1 默认参数坑）——`安装.cmd` 传 `-PackageRoot "%~dp0."`，`Install.ps1` param 后补兜底（变更记录 #7）
 
 ## [0.3.0] - 2026-08-24
 

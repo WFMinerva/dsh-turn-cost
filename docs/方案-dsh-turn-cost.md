@@ -353,6 +353,7 @@ B 轻流程（改 bug）：门一已对齐范围（机主确认"只显官方余�
 - `lib/client.js`：仅文案——badge/dock quotaTitle 由「本地 OAuth 服务」改为「官方读数（coding API 或本地 OAuth 服务）」；渲染逻辑 0.4.0 已按 windows[].remaining 显示次数，无需改。
 - **0.4.0 代码回库**：fold.js/index.js/client.js/quota.js/package.json（0.4.0）从部署副本同步回仓库，漂移消除；新增 `test/quota.test.mjs`（官方 API/loopback/aliyun 三种解析 5 项）。
 - `C:\Users\Admin\.dsh\turn-cost-rates.json`：quota 块注释改新口径（kimi 官方 API 优先 + loopback 备选；qwen 需 bl console + open-api AK/SK）。
+- **文档同步（机主跟进要求）**：README/CHANGELOG/DEVELOPMENT/rates.example.json 从 0.3.0 口径更新到 0.4.0——CHANGELOG 补 0.4.0 条目；README 改 Kimi 次数口径示例、补双路径与 AK/SK 自动续期说明、内置路由说明；DEVELOPMENT #17/#20 改口径 + 新增 #21 双路径决策 + §七 quota 维护要点更新；rates.example.json quota 注释同步。
 
 ### 验证
 
