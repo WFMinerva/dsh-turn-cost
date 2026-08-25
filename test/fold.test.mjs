@@ -333,3 +333,15 @@ test("quotaConfigOf: prototype-name keys never leak", () => {
   const parsed = JSON.parse(`{"quota":{"__proto__":{"kind":"kimi-usages"},"constructor":{"kind":"aliyun-bl"}}}`);
   assert.deepEqual(Object.keys(quotaConfigOf(parsed)), []);
 });
+
+test("quotaConfigOf: kimi route accepts both official-API and loopback credential paths", () => {
+  // Official coding API: https baseUrl + credentialRef (open-the-GUI path).
+  const official = quotaConfigOf({ quota: { "kimi-coding": { kind: "kimi-usages", credentialRef: "KIMI_CODING_API_KEY", baseUrl: "https://api.kimi.com/coding/v1" } } });
+  assert.deepEqual(official["kimi-coding"], { kind: "kimi-usages", credentialRef: "KIMI_CODING_API_KEY", baseUrl: "https://api.kimi.com/coding/v1" });
+  // Loopback OAuth server: loopback baseUrl only (no credentialRef).
+  const loopback = quotaConfigOf({ quota: { "kimi-coding": { kind: "kimi-usages", baseUrl: "http://127.0.0.1:58627" } } });
+  assert.deepEqual(loopback["kimi-coding"], { kind: "kimi-usages", baseUrl: "http://127.0.0.1:58627" });
+  // Plain http that is not loopback is rejected; route survives without baseUrl.
+  const insecure = quotaConfigOf({ quota: { "kimi-coding": { kind: "kimi-usages", baseUrl: "http://insecure.example" } } });
+  assert.deepEqual(insecure["kimi-coding"], { kind: "kimi-usages" });
+});

@@ -262,3 +262,115 @@ B 轻流程（改 bug），机主一句话对齐后修复+复检；本记录按 
 ### 门禁
 
 机主对金额/额度口径已逐项拍板（本节「机主重述」）；端点级实测三条路由全通；待机主 GUI 目检收尾门三。推送与 npm 发布仍待机主指令。
+
+## 变更记录 #7（2026-08-25，B 轻流程·改 bug：0.4.0 一键安装包 Install.ps1 启动即崩）
+
+### 事故
+
+机主运行 `dsh-turn-cost-setup-0.4.0-win-x64.zip`（解压后双击 `安装.cmd`）报错：
+
+```
+Install.ps1 : Exception calling "GetFullPath" with "1" argument(s): "Illegal characters in path."
+FullyQualifiedErrorId : ArgumentException,Install.ps1
+```
+
+### 根因（双层）
+
+1. **cmd `\"` 转义**：`安装.cmd` 传 `-PackageRoot "%~dp0"`，`%~dp0` 以反斜杠结尾 → 展开为 `"...win-x64\"`，Windows CRT 参数解析把结尾 `\"` 当转义引号，PowerShell 实际收到 `C:\...\win-x64"`（含字面引号、反斜杠丢失）。`"` 是非法路径字符 → `[IO.Path]::GetFullPath` 抛 ArgumentException。已用探针脚本逐字节证实。
+2. **PS 5.1 默认参数坑**：去掉 `-PackageRoot` 后仍崩（错误变为 `The path is not of a legal form.`）——`[CmdletBinding()]` 脚本以 `-File` 方式启动时，param 默认值 `$PackageRoot = $PSScriptRoot` 求值为空（探针 5 证实：有 CmdletBinding 则空、无则正常）。空字符串同样让 GetFullPath 抛异常。
+
+### 修复
+
+- `安装.cmd`：`-PackageRoot "%~dp0"` → `-PackageRoot "%~dp0."`（以 `.` 结尾，不再触发 `\"` 转义；GetFullPath 规范化后等价）。
+- `Install.ps1`：param 块后加兜底 `if ([string]::IsNullOrWhiteSpace($PackageRoot)) { $PackageRoot = $PSScriptRoot }`，防直接调用再踩 PS 5.1 默认参数坑。
+- `content-sha256.json`：同步更新 `安装.cmd` 与 `Install.ps1` 两项哈希。
+- 已重新打包 `dsh-turn-cost-setup-0.4.0-win-x64-fixed.zip`（桌面，16 条目结构与原包一致）。
+
+### 复检
+
+- 原错误稳定复现（修改前必现 GetFullPath 异常）。
+- 修复后实跑 `安装.cmd`：GetFullPath 全过，正确推进到预期守卫 `DSH_RUNNING: 3080 正在监听，请先退出 DSH 再安装`（当时 DSH 正运行，属预期拦截而非报错）。
+- 新 zip 解压后 15/15 文件 SHA-256 与 content-sha256.json 全一致。
+- 完整安装链路（插件安装/备份/回滚）未实跑——需机主退出 DSH 后双击安装验证；安装器其余 4 个 .cmd 传参不以反斜杠结尾，未受影响。
+
+### 遗留观察（非阻断）
+
+- 一键包生成源（`installer/Install.ps1`、`scripts/build-windows-installer.ps1`）尚未入库到 dsh-turn-cost 或 tool-library 的任何已提交路径（TL-135 登记的嵌套仓库 `work/dsh-turn-cost` 当前不存在）；本次修复直接落在桌面产物上。建议把生成源与 `.cmd` 模板入库，否则下次打包仍会重踩 cmd `\"` 转义与 PS 5.1 默认参数两个坑。
+
+### 门禁
+
+B 轻流程（改 bug）：门一已对齐范围；改动仅 3 个产物文件 + 1 份文档；未触发风险阈值（不设门二）；待机主在退出 DSH 后实装验证收尾。推送与发布待机主指令。
+
+## 变更记录 #8（2026-08-25，B 轻流程·改 bug：Kimi 额度显示口径——不再 ÷limit 算百分比，直接显官方余额次数）
+
+### 事故
+
+机主反馈：Kimi 订阅额度显示"算错了"。codex 复核口径：官方 usages 端点给的是**次数**（5h used=53 / remaining=47，上限 100 次），而 client 渲染把 `remaining ÷ limit` 换算成百分比（47%）显示——"除 100 是不对的，应该显示余额"。
+
+### 根因
+
+- 0.4.0 部署副本 `lib/client.js` 三处渲染（徽章 badge、会话行 dock、汇总面板 quota.window.line）都做了 `w.remaining / w.limit` 的百分比换算；
+- 但 `lib/quota.js` 的 `normalizeKimiLocalUsage` 已返回原始次数（`used`/`remaining` 字段），host 端没有错——错在 client 渲染层多除了一次上限；
+- 且旧版（0.3.0）徽章还用过本地请求数 `requests / limit`（62/100=62%）当消耗占比，与官方 used=53 不一致，属同一"用本地数除上限伪装成官方消耗"的错误口径（已在 0.4.0 移除本地请求数，但残留了 ÷limit 转百分比）。
+
+### 修复
+
+- `lib/client.js`：
+  - 徽章 `badge.quota`：`本轮 {tokens} token · 5h 还剩 {remaining} 次`（remaining 直接用官方次数，不再 ÷limit）；
+  - 会话行 `dock.quota`：` · 5h 还剩 {remaining} 次`；
+  - 汇总面板 `quota.window.line`：`已用 {used}/{limit} 次 · 还剩 {remaining} 次 · {resetAt} 重置`（次数口径）；
+  - zh/en locale 同步；title 文案说明"剩余次数为官方实时读数，不把请求次数伪装成额度消耗"。
+- 阿里 qwen 段不变（官方给的就是 usedPercent/remainingPercent 比例，且 Credits 无法精确归因，保持百分比口径）。
+- 同步物：部署副本 `C:\Users\Admin\.dsh\profiles\web\node_modules\dsh-turn-cost\lib\client.js`（当前 DSH 加载的就是它）、`~/.dsh/turn-cost-installer-package/payload/dsh-turn-cost-0.4.0.tgz`、桌面解压目录 payload 与 manifest/content-sha256 哈希、桌面 `dsh-turn-cost-setup-0.4.0-win-x64-fixed.zip` 重打包（15/15 哈希校验通过）。
+
+### 复检
+
+- `node --check`：client.js/quota.js/index.js 全过；仓库 `node --test` 26/26 通过（fold/quota 逻辑未动，回归无碍）。
+- zip 解压后 15/15 文件 SHA-256 与 content-sha256.json 一致；tgz 内 client.js 含新文案、旧 `÷limit` 逻辑已移除。
+- 待机主重启 dsh web 后目检：Kimi 徽章应显示「5h 还剩 47 次」而非「5h 已用 53% · 剩余 47%」。
+
+### 门禁
+
+B 轻流程（改 bug）：门一已对齐范围（机主确认"只显官方余额次数"）；改动仅 client 渲染层 + locale + 产物哈希；未触发风险阈值（不设门二）；待机主重启 dsh web 目检收尾。推送与发布待机主指令。
+
+## 变更记录 #9（2026-08-25，B 轻流程·改 bug：Kimi/Qwen 额度「打开即用」——官方 API 优先 + 0.4.0 代码回库）
+
+### 事故
+
+机主反馈：turn 插件里 Qwen 和 Kimi 的额度功能"没实现"——打开 DSH 后 Kimi/Qwen 会话徽章永远只显示「本轮 N token · 缓存读 X%」，没有额度行。归档串（tool-library 会话 e67762b4）已查 Kimi 侧：token 计数正常，缺的是配额读数。本记录补全双平台根因并落地「打开即用」方案。
+
+### 根因（双平台 + 结构）
+
+1. **Kimi（部署 0.4.0 必失败）**：0.4.0 的 `fetchKimiQuota` 只走 **loopback OAuth**（读 `~/.kimi-code/server.token` + `127.0.0.1:58627`）。本机两者都不存在 → `kimi-server-token-not-found` → `ok:false` → client 徽章落到 token-only 兜底行。而 `.credentials.yaml` 里 `KIMI_CODING_API_KEY`（72 字符）在库、永久有效——0.3.0 的官方 API 方案本可打开即用，0.4.0 把它换掉了。
+2. **Qwen（bl console 登录过期）**：`bl usage token-plan` 官方认证 = Console OAuth，token 会过期（实测 `Console session is not logged in or has expired`）；`bl auth login --api-key` 只存模型调用 key，不能查用量。官方文档（[Token Plan 个人版 FAQ](https://help.aliyun.com/zh/model-studio/token-plan-personal-faq.md?mode=pure)）明说用量在百炼控制台查看——无 API-key 直查接口。**但** bailian-cli 官方实现（[refresh-token.ts](https://github.com/modelstudioai/cli/blob/main/packages/core/src/auth/refresh-token.ts)）支持用存储的 OpenAPI AK/SK 自动续期 console token：`bl auth login --open-api` 配一次 AK/SK，之后 token 过期自动刷新，免手动登录。
+3. **结构漂移**：部署副本 0.4.0（含 quota.js、loopback、builtinQuotaRoutes、#8 次数口径）从未入库——仓库 HEAD 停在 0.3.0（官方 API 实现，无 quota.js）。git log 无 quota.js 任何提交。tools.md 登记的嵌套仓库 `work/dsh-turn-cost` 不存在。
+
+### 修复（合并：官方 API 优先 + loopback 兜底 + 0.4.0 回库）
+
+- `lib/quota.js`：新增 `normalizeKimiUsages`（官方 coding API `GET /usages` 响应解析：7d/5h 窗口 + 加油包 nano-CNY + 月度 cents + parallel，实测形状 2026-08-25）；保留 `normalizeKimiLocalUsage`（loopback）。
+- `lib/fold.js`：`quotaConfigOf` 的 `kimi-usages` 支持**双凭据路径**——https baseUrl + `credentialRef`（官方 API，默认 `KIMI_CODING_API_KEY`）或 loopback baseUrl（本地 OAuth）；非 loopback 的裸 http 仍拒绝。
+- `lib/index.js`：`fetchKimiQuota` 按 baseUrl 分流——https（默认）→ 官方 API + `.credentials.yaml` 凭据；loopback → 本地 OAuth。恢复 `resolveCredentialValue`（.credentials.yaml refs 行解析，值只在内存）与 `credentialsFile` 字段；错误码细分为 `kimi-credential-not-found` / `kimi-api-unavailable` / `kimi-server-token-not-found` / `kimi-server-unavailable` / `kimi-output-unrecognized`。
+- `lib/client.js`：仅文案——badge/dock quotaTitle 由「本地 OAuth 服务」改为「官方读数（coding API 或本地 OAuth 服务）」；渲染逻辑 0.4.0 已按 windows[].remaining 显示次数，无需改。
+- **0.4.0 代码回库**：fold.js/index.js/client.js/quota.js/package.json（0.4.0）从部署副本同步回仓库，漂移消除；新增 `test/quota.test.mjs`（官方 API/loopback/aliyun 三种解析 5 项）。
+- `C:\Users\Admin\.dsh\turn-cost-rates.json`：quota 块注释改新口径（kimi 官方 API 优先 + loopback 备选；qwen 需 bl console + open-api AK/SK）。
+
+### 验证
+
+- `node --test` 31/31（基线 26 + 新 5 项）；`node --check` 四 lib 全过。
+- **端点级实测（2026-08-25，真实 .credentials.yaml 凭据直连）**：`GET https://api.kimi.com/coding/v1/usages` → 7d 34/100、5h 3/100、加油包 ¥28.79、月度 ¥871.21/¥1000、parallel 30——官方 API 路径端到端打通，无需任何本地服务。
+- 配置解析实测：`mergeQuotaRoutes(builtinQuotaRoutes(), turn-cost-rates.json)` → kimi `{kind, credentialRef}`、qwen `{kind, command}` 正确。
+- 部署副本四 lib 与仓库逐字节一致。
+
+### 机主配合项（一次性）
+
+1. Qwen 侧「打开即用」：`bl auth login --console`（浏览器登录一次）+ `bl auth login --open-api --access-key-id <id> --access-key-secret <secret>`（存 AK/SK，此后 console token 自动续期）。无 AK/SK 则 Qwen 额度降级（偶尔手动登录，或只看控制台）。
+2. 重启 dsh web（当前 GUI 加载的是已同步的部署副本），目检：Kimi 徽章应显示「本轮 N token · 5h 还剩 M 次」；Qwen 徽章显示「剩余 Y%」。
+
+### 遗留观察（非阻断）
+
+- `~/.dsh/turn-cost-installer-package/payload/dsh-turn-cost-0.4.0.tgz` 与桌面 zip 仍是旧 0.4.0（loopback-only）——下次重装/换机前需用本仓库新代码重新打包（生成源尚未入库，见 #7 遗留观察）。
+- `bl usage token-plan` 实测当前 `bl-failed`（未登录）；AK/SK 配置完成后应返回 `per1WeekPercentage`（#6 曾实测 15.5%）。
+
+### 门禁
+
+B 轻流程（改 bug）：门一已对齐范围（机主拍板：Qwen 走 bl+AK/SK 自动续期；全量改部署+源码+配置+测试）；未触发风险阈值（不设门二）；待机主完成 bl 登录与重启 dsh web 后目检收尾。推送与发布待机主指令。
