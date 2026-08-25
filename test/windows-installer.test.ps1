@@ -120,6 +120,8 @@ exit /b %errorlevel%
   Assert-True ((Hash (Join-Path $testDshHome 'settings.yaml')) -eq $settingsHash) 'settings byte-identical'
   Assert-True ((Hash (Join-Path $testDshHome '.credentials.yaml')) -eq $credentialsHash) 'credentials byte-identical'
   Assert-True (Test-Path -LiteralPath (Join-Path $testDshHome 'turn-cost-launcher\启动 DSH（含额度）.cmd')) 'launcher copied'
+  Assert-True (Test-Path -LiteralPath (Join-Path $testDshHome 'turn-cost-launcher\配置额度登录.cmd')) 'credential helper copied'
+  Assert-True (Test-Path -LiteralPath (Join-Path $testDshHome 'turn-cost-launcher\配置额度登录.ps1')) 'credential helper script copied'
   $state1 = Get-Content -Raw -LiteralPath (Join-Path $testDshHome 'turn-cost-installer\state.json') | ConvertFrom-Json
   Assert-True ($state1.toolsReady -is [bool]) 'toolsReady is a boolean'
   Assert-True ([bool]$state1.toolsReady) 'private tools are ready'

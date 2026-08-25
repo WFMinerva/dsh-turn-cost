@@ -6,6 +6,14 @@
 
 $script:Acc = @{ startedKimi = $false; dshProcess = $null; dshListenerPid = $null; kimiProcess = $null; extract = $null; backupPath = $null; dshExe = $null; dshHome = $null; baselineProfileHash = $null; zip = $null }
 
+function Resolve-KimiHome {
+  $configured = [string]$env:KIMI_CODE_HOME
+  if (-not [string]::IsNullOrWhiteSpace($configured) -and [IO.Path]::IsPathRooted($configured)) {
+    return [IO.Path]::GetFullPath($configured)
+  }
+  return Join-Path ([Environment]::GetFolderPath('UserProfile')) '.kimi-code'
+}
+
 function Get-JsonProperty($Obj, [string]$Name) {
   if ($null -eq $Obj) { return $null }
   foreach ($p in $Obj.PSObject.Properties) { if ($p.Name -ceq $Name) { return $p.Value } }
@@ -26,7 +34,13 @@ function Get-AdapterInfo {
 function Find-RemainingPercent($Obj) {
   if ($null -eq $Obj) { return $null }
   foreach ($p in $Obj.PSObject.Properties) {
-    if ($p.Name -eq 'remainingPercent') { return $p.Value }
+    if ($p.Name -ieq 'remainingPercent') { return $p.Value }
+    if ($p.Name -ieq 'per1WeekPercentage') {
+      $used = 0.0
+      if ([double]::TryParse([string]$p.Value, [ref]$used) -and $used -ge 0 -and $used -le 1) {
+        return (1.0 - $used)
+      }
+    }
     if ($p.Value -is [pscustomobject]) {
       $found = Find-RemainingPercent $p.Value
       if ($null -ne $found) { return $found }
@@ -134,7 +148,7 @@ function Get-DoctorSteps {
           ('launcher=' + (Test-Path -LiteralPath (Join-Path $dshHome 'turn-cost-launcher\启动 DSH（含额度）.cmd') -PathType Leaf)),
           ('kimi.cmd=' + (Test-Path -LiteralPath (Join-Path $tools 'kimi.cmd') -PathType Leaf)),
           ('bl.cmd=' + (Test-Path -LiteralPath (Join-Path $tools 'bl.cmd') -PathType Leaf)),
-          ('kimi token=' + (Test-Path -LiteralPath (Join-Path ([Environment]::GetFolderPath('UserProfile')) '.kimi-code\server.token') -PathType Leaf))
+          ('kimi token=' + (Test-Path -LiteralPath (Join-Path (Resolve-KimiHome) 'server.token') -PathType Leaf))
         )
         return [pscustomobject]@{ status = 'PASS'; summary = ($parts -join '；') }
       } }
@@ -174,7 +188,7 @@ function Invoke-AcceptancePs1([string]$Mode, [string]$PackageRoot) {
 }
 
 function Get-KimiToken {
-  $tokenPath = Join-Path ([Environment]::GetFolderPath('UserProfile')) '.kimi-code\server.token'
+  $tokenPath = Join-Path (Resolve-KimiHome) 'server.token'
   if (-not (Test-Path -LiteralPath $tokenPath -PathType Leaf)) { throw 'KIMI_SERVER_TOKEN_NOT_FOUND：请先运行 kimi login' }
   return (Get-Content -Raw -LiteralPath $tokenPath).Trim()
 }

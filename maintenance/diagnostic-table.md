@@ -46,7 +46,16 @@
 |---|---|---|---|
 | `KIMI_CLI_MISSING` | 私有 kimi CLI 缺失 | 离线安装未补齐 | 运行「补齐额度CLI.cmd」 |
 | `KIMI_SERVER_START_FAILED` | 58627 未出现健康响应 | Kimi 启动异常 | 手工 `kimi web --no-open` 观察输出 |
-| `KIMI_SERVER_TOKEN_NOT_FOUND` | 无本地 server token | 未登录 | 运行 `kimi login` |
+| `KIMI_SERVER_TOKEN_NOT_FOUND` / `KIMI_SERVER_TOKEN_INVALID` | 无有效本地 server token | 未登录/token 文件为空 | 运行「配置额度登录.cmd」 |
 | `KIMI_SERVER_IDENTITY_FAILED` | 58627 不是可认证的 Kimi | 端口被他占 | 释放端口（不杀进程原则：先确认归属） |
 | `KIMI_SHUTDOWN_REJECTED` | 官方 shutdown 拒绝 | 接口异常 | 人工检查 58627 |
 | `DSH_EXIT_<n>` | DSH 退出码非零 | 视 n 而定 | 查 DSH 日志 |
+
+## 凭据辅助入口（installer/配置额度登录.ps1）
+
+| 错误码 | 含义 | 常见原因 | 处置 |
+|---|---|---|---|
+| `CLI_MISSING` | 私有 Kimi/百炼 CLI 缺失 | 离线安装未补齐 | 运行「补齐额度CLI.cmd」 |
+| `KIMI_LOGIN_FAILED` | Kimi OAuth 未落盘 | 浏览器登录未完成 | 重新运行并完成官方页面确认 |
+| `BLAUTH_LOGIN_FAILED` | 百炼控制台 OAuth 命令失败 | 浏览器未完成登录 | 登录百炼控制台后重试 |
+| `BL_USAGE_FAILED` | Token Plan 真实读取失败 | 控制台会话过期/账号不含套餐 | 重新登录正确百炼账号后重试 |

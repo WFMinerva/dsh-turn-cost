@@ -2,6 +2,19 @@
 
 本文件按 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 维护，版本号遵循语义化版本。
 
+## [0.4.2] - 2026-08-25
+
+### Fixed
+
+- **纠正 0.4.0/0.4.1 的 Kimi 额度凭据判断**：模型 API Key 只负责模型调用，不能作为可靠的套餐额度凭据；Kimi 额度恢复为已经在单位机和家用机分别实测通过的 Kimi Code OAuth loopback 路线（`127.0.0.1:58627`）。
+- 删除 host 对 DSH `.credentials.yaml` 的额度读取与远程 HTTPS Kimi quota 路径；`kimi-usages` 只接受 loopback `baseUrl`，内置默认显式固定为 `http://127.0.0.1:58627`。
+- 日常启动器恢复 Kimi 服务生命周期管理：启动前检查 OAuth token、拒绝占用 58627 的非 Kimi 服务、验证 `/api/v1/meta` 身份，并只关闭本启动器创建的实例。
+- 新增“配置额度登录”入口，顺序调用官方 `kimi login` 与 `bl auth login --console --console-site domestic`；不接收、复制或记录 API Key、AK/SK。
+
+### Security
+
+- 安装器仍不读取或修改 DSH `.credentials.yaml`；Kimi loopback bearer 只在启动器/插件进程内用于本机官方服务认证，不写入报告或仓库。
+
 ## [0.4.1] - 2026-08-25
 
 ### Fixed

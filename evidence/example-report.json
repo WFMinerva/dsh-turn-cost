@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "command": "acceptance",
-  "adapter": { "name": "dsh-turn-cost", "version": "0.4.1" },
+  "adapter": { "name": "dsh-turn-cost", "version": "0.4.2" },
   "core": { "vendor_commit": "0000000000000000000000000000000000000000", "schema_version": 1 },
   "machine": {
     "class": "home",
@@ -12,7 +12,7 @@
   "started_at": "2026-01-01T00:00:00.0000000Z",
   "finished_at": "2026-01-01T00:12:00.0000000Z",
   "checks": [
-    { "id": "precheck", "status": "PASS", "code": null, "summary": "前置通过；制品 dsh-turn-cost-setup-0.4.1-win-x64.zip；安装前基线哈希已登记（不回显）", "detail": "前置通过；制品 dsh-turn-cost-setup-0.4.1-win-x64.zip；安装前基线哈希已登记（不回显）" },
+    { "id": "precheck", "status": "PASS", "code": null, "summary": "前置通过；制品 dsh-turn-cost-setup-0.4.2-win-x64.zip；安装前基线哈希已登记（不回显）", "detail": "前置通过；制品 dsh-turn-cost-setup-0.4.2-win-x64.zip；安装前基线哈希已登记（不回显）" },
     { "id": "install", "status": "PASS", "code": null, "summary": "安装成功；回滚点与 DSH 入口已登记", "detail": "安装成功；回滚点与 DSH 入口已登记" },
     { "id": "reinstall", "status": "PASS", "code": null, "summary": "幂等重跑成功；回滚点不变", "detail": "幂等重跑成功；回滚点不变" },
     { "id": "start", "status": "PASS", "code": null, "summary": "启动成功；Kimi 由本链启动=True", "detail": "启动成功；Kimi 由本链启动=True" },
@@ -23,7 +23,7 @@
     { "id": "reinstall-after-rollback", "status": "PASS", "code": null, "summary": "回滚后再安装成功", "detail": "回滚后再安装成功" }
   ],
   "artifacts": [
-    { "path": "dist/dsh-turn-cost-setup-0.4.1-win-x64.zip", "sha256": "0000000000000000000000000000000000000000000000000000000000000000" }
+    { "path": "dist/dsh-turn-cost-setup-0.4.2-win-x64.zip", "sha256": "0000000000000000000000000000000000000000000000000000000000000000" }
   ],
   "skipped": [],
   "cleanup": { "status": "PASS", "detail": "清理完成：进程/端口/临时目录均已恢复" },

@@ -243,7 +243,7 @@ function Install-Launcher([string]$DshHome, [string]$Root) {
   }
   $target = Assert-ChildPath $DshHome (Join-Path $DshHome 'turn-cost-launcher')
   New-Item -ItemType Directory -Force -Path $target | Out-Null
-  foreach ($name in @('Launch.ps1', '启动 DSH（含额度）.cmd', '补齐额度CLI.cmd', '回滚上一次安装.cmd', '卸载.cmd')) {
+  foreach ($name in @('Launch.ps1', '配置额度登录.ps1', '启动 DSH（含额度）.cmd', '配置额度登录.cmd', '补齐额度CLI.cmd', '回滚上一次安装.cmd', '卸载.cmd')) {
     Copy-Item -LiteralPath (Join-Path $Root $name) -Destination (Join-Path $target $name) -Force
   }
 }
@@ -349,4 +349,4 @@ $state = [ordered]@{
 }
 Write-State $dshHome $state
 Write-Step 'INSTALL_OK：插件与启动入口已就绪'
-Write-Step '下一步：在 DSH 设置→模型中手动填写 Kimi/Qwen API Key；Qwen 额度另需 bl 控制台登录（仅显式使用 Kimi loopback 时才需 kimi login）'
+Write-Step '下一步：先运行“配置额度登录.cmd”完成 Kimi/百炼 OAuth，再在 DSH 设置→模型中手动填写 Kimi/Qwen API Key'

@@ -629,3 +629,32 @@ B 轻流程（改 bug）：门一已对齐范围（机主拍板：Qwen 走 bl+AK
 - **根门禁**：`python tools/checks.py --json` 为 0 FAIL（C1–C5/C8 PASS，C6 INFO，C7 仅因本轮未提交改动与本地 ahead 产生 WARN）；图谱重建为 134 项。项目侧 `git diff --check`、四个 JS 语法、PowerShell 5.1 语法、`npm pack --dry-run` 均通过。
 - **K3 状态**：2026-08-25 已启动第一层只读审计，但模型服务多轮超时，尚未形成 verdict；机主随后明确指令“k3复检取消”。因此本轮不把 K3 记为通过，按机主取消决定结束该门禁。
 - **门三状态**：家用机实现与验证完成，现停门三等待机主确认。单位机、笔记本仍是同一 ZIP 的后续跨机验收，不冒充本机已验证。当前未提交、未推送、未发布 npm；门三确认不等于推送授权。
+
+## 变更记录 #13（2026-08-25，0.4.2：纠正 Kimi 模型 Key 与额度凭据混淆）
+
+### 错误确认
+
+- 变更记录 #9 将一次特定凭据直连 `api.kimi.com/coding/v1/usages` 的成功错误推广为通用默认，并把 DSH 模型 API Key 当作套餐额度凭据；该结论已被单位机与家用机的实际部署结果推翻。
+- 家用机重新填写模型 Key 后，Kimi/Qwen 模型调用均成功，但 Kimi 直连额度仍返回 `kimi-api-unavailable`。同机完成 `kimi login`、启动 Kimi Code loopback 并切换 `baseUrl` 后，DSH 立即显示 7d/5h/加油包/月度额度；百炼控制台 OAuth 后 Qwen 7 天额度同步显示。
+- 0.4.1 又删除了日常启动器中的 Kimi 服务生命周期，构成功能回退。错误提交保留在历史中，不重写、不强推；本记录明确废止其中的默认路线结论。
+
+### 0.4.2 修复范围
+
+- `kimi-usages` 只接受 `127.0.0.1|localhost` loopback，内置默认固定 `http://127.0.0.1:58627`；删除 host 对 `.credentials.yaml` 的额度解析、远程 HTTPS 路径及 `normalizeKimiUsages`。
+- 恢复 Windows 启动器对 Kimi Code 服务的按需启动、身份验证和受管关闭；端口被非 Kimi 服务占用时失败关闭，不终止未知进程。
+- 新增“配置额度登录”入口，只编排官方 `kimi login` 与 `bl auth login --console --console-site domestic`，不接收或保存模型 Key、AK/SK。
+- 版本升至 0.4.2，更新合同测试、Windows 夹具、安装说明、README、CHANGELOG 与示例报告；重新执行静态门禁、可重现构建、真实安装/回滚验收和独立模型复检。
+
+### 推送边界
+
+- 仅向 `codex/config-startup-regression-gates` 正常推送，不改写 `origin/master` 历史；GitHub CI 通过后再决定合并。
+- 根仓库当前包含其他本地提交，本轮不推根仓库；任何凭据、本机 OAuth 配置、私有费率表和原始认证日志均不入库。
+
+### 实施与验证结果
+
+- Node 全量测试 **60/60**；维护验证 **5/5 PASS**，覆盖 vendor 完整性、PowerShell 语法与 BOM、版本一致性及 Windows 安装夹具。
+- 家用机从已确认的 0.4.1 基线执行候选安装、同版本重装、日常启动、真实额度探测、受管退出、精确回滚、回滚后重装和清理，全部通过；3080/58627 均无残留。
+- 真机探测确认 Kimi meta/usage code 0；百炼 `bl usage token-plan --output json` 的 `per1WeekPercentage` 已被适配层识别。浏览器同时显示 Kimi 7d/5h/加油包/月度与百炼 7 天剩余额度。
+- 从已经安装同一候选的状态重复运行整套验收，会因保存的回滚点仍指向升级前基线而触发哈希保护；恢复 0.4.1 基线后完整事务通过。该保护未被放宽，也未用失败重跑冒充最终结果。
+- 独立模型首轮复检发现并阻断两处一致性问题：README/示例费率仍残留 `--open-api` 存 AK/SK 指引；启动器/登录辅助未与 host 一致解析 `KIMI_CODE_HOME`。现已删除现行文档中的 AK/SK 路线，统一 token home，并把 Kimi CLI 非零退出降为明确 `AUTH_PENDING`（token 为空仍失败），不再误报 `AUTH_OK`。
+- 修正后的最终制品为 `dist/dsh-turn-cost-setup-0.4.2-win-x64.zip`，SHA-256 `FD0FDEB2EC8017B41D9D545F61C414BE40870D79AF3604B60155678C8E5726A9`；内容清单 SHA-256 `B09E56AB9E61A7C4FCA02B3E470820C1FB20D123F7385C40B6D1BF5B4FA721D7`。`npm pack --dry-run --ignore-scripts` 通过；根仓库门禁 0 FAIL。未取得 CI 结果前不合并 `master`。

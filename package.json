@@ -1,6 +1,6 @@
 {
   "name": "dsh-turn-cost",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "Per-conversation subscription quota share (Kimi/Aliyun Token Plan windows, model names from the log) plus per-turn/session estimated cost — shown in the dsh web UI",
   "type": "module",
   "packageManager": "npm@11.16.0",

@@ -27,7 +27,7 @@ test("installer pins the DSH launcher per versions.json and keeps the pnpm build
   }
 });
 
-test("installer never reads the DSH credential store or forces the optional Kimi loopback service", async () => {
+test("installer never reads the DSH credential store and launcher owns the Kimi loopback lifecycle", async () => {
   const install = await readFile(new URL("../installer/Install.ps1", import.meta.url), "utf8");
   const launch = await readFile(new URL("../installer/Launch.ps1", import.meta.url), "utf8");
   assert.doesNotMatch(install, /\.credentials\.yaml/i);
@@ -35,8 +35,29 @@ test("installer never reads the DSH credential store or forces the optional Kimi
   assert.doesNotMatch(install, /@deepseek-ai\/dsh['"@, ]+--version/);
   assert.match(install, /Kind = 'isolated-pnpm'/);
   assert.match(install, /install', '--frozen-lockfile/);
-  assert.doesNotMatch(launch, /server\.token|58627|kimi\.cmd|Invoke-KimiJson/);
+  assert.match(launch, /server\.token/);
+  assert.match(launch, /kimi\.cmd/);
+  assert.match(launch, /127\.0\.0\.1:58627/);
+  assert.match(launch, /Authorization\s*=\s*"Bearer \$Token"/);
+  assert.match(launch, /\/api\/v1\/meta/);
+  assert.match(launch, /\/api\/v1\/shutdown/);
+  assert.match(launch, /ContentType 'application\/json' -Body '\{\}'/);
+  assert.match(launch, /KIMI_CODE_HOME/);
   assert.match(launch, /@\(\$state\.dsh\.prefix\) \+ @\('web'\)/);
+});
+
+test("credential helper delegates to official interactive OAuth commands without embedding secrets", async () => {
+  const helper = await readFile(new URL("../installer/配置额度登录.ps1", import.meta.url), "utf8");
+  const install = await readFile(new URL("../installer/Install.ps1", import.meta.url), "utf8");
+  assert.match(helper, /& \$kimi login/);
+  assert.match(helper, /& \$bl auth login --console --console-site domestic/);
+  assert.match(helper, /& \$bl usage token-plan --output json/);
+  assert.doesNotMatch(helper, /--api-key|--access-key-id|--access-key-secret/);
+  assert.match(helper, /KIMI_CODE_HOME/);
+  assert.match(helper, /IsNullOrWhiteSpace\(\$token\)/);
+  assert.match(helper, /AUTH_PENDING/);
+  assert.match(install, /'配置额度登录\.ps1'/);
+  assert.match(install, /'配置额度登录\.cmd'/);
 });
 
 test("Windows entry scripts stay process-scoped and do not create persistence", async () => {
@@ -45,7 +66,7 @@ test("Windows entry scripts stay process-scoped and do not create persistence", 
   const combined = `${install}\n${launch}`;
   assert.doesNotMatch(combined, /Register-ScheduledTask|schtasks|New-Service|Set-ExecutionPolicy/i);
   assert.doesNotMatch(combined, /New-NetFirewallRule|netsh\s+advfirewall/i);
-  assert.doesNotMatch(launch, /127\.0\.0\.1:58627/);
+  assert.match(launch, /127\.0\.0\.1:58627/);
 });
 
 test("versions.json is the single deployment pin source and every derived file agrees", async () => {
@@ -93,4 +114,10 @@ test("adapter layer does not redefine generic-layer reserved functions (no core 
     assert.doesNotMatch(adapter, new RegExp("function\\s+(?:[A-Za-z]+:)?" + name + "\\b", "i"),
       "adapter redefines generic function " + name);
   }
+});
+
+test("acceptance recognizes the official Bailian weekly percentage shape", async () => {
+  const adapter = await readFile(new URL("../maintenance/adapter.ps1", import.meta.url), "utf8");
+  assert.match(adapter, /per1WeekPercentage/);
+  assert.match(adapter, /1\.0 - \$used/);
 });
