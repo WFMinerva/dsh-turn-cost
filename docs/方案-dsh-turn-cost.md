@@ -657,4 +657,5 @@ B 轻流程（改 bug）：门一已对齐范围（机主拍板：Qwen 走 bl+AK
 - 真机探测确认 Kimi meta/usage code 0；百炼 `bl usage token-plan --output json` 的 `per1WeekPercentage` 已被适配层识别。浏览器同时显示 Kimi 7d/5h/加油包/月度与百炼 7 天剩余额度。
 - 从已经安装同一候选的状态重复运行整套验收，会因保存的回滚点仍指向升级前基线而触发哈希保护；恢复 0.4.1 基线后完整事务通过。该保护未被放宽，也未用失败重跑冒充最终结果。
 - 独立模型首轮复检发现并阻断两处一致性问题：README/示例费率仍残留 `--open-api` 存 AK/SK 指引；启动器/登录辅助未与 host 一致解析 `KIMI_CODE_HOME`。现已删除现行文档中的 AK/SK 路线，统一 token home，并把 Kimi CLI 非零退出降为明确 `AUTH_PENDING`（token 为空仍失败），不再误报 `AUTH_OK`。
+- PR 首轮 CI 的 Linux job 通过，Windows job 暴露 checkout 将受哈希保护的 vendor 文本换行为 CRLF，导致 11 文件逐字节哈希不符；新增 `.gitattributes` 固定 `vendor/maintenance/**` 与 manifest 为 LF，并加入合同测试。
 - 修正后的最终制品为 `dist/dsh-turn-cost-setup-0.4.2-win-x64.zip`，SHA-256 `FD0FDEB2EC8017B41D9D545F61C414BE40870D79AF3604B60155678C8E5726A9`；内容清单 SHA-256 `B09E56AB9E61A7C4FCA02B3E470820C1FB20D123F7385C40B6D1BF5B4FA721D7`。`npm pack --dry-run --ignore-scripts` 通过；根仓库门禁 0 FAIL。未取得 CI 结果前不合并 `master`。

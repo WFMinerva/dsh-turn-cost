@@ -121,3 +121,9 @@ test("acceptance recognizes the official Bailian weekly percentage shape", async
   assert.match(adapter, /per1WeekPercentage/);
   assert.match(adapter, /1\.0 - \$used/);
 });
+
+test("Git checkouts preserve vendor bytes used by the integrity manifest", async () => {
+  const attrs = await readFile(new URL("../.gitattributes", import.meta.url), "utf8");
+  assert.match(attrs, /^vendor\/maintenance\/\*\* text eol=lf$/m);
+  assert.match(attrs, /^vendor\/manifest\.json text eol=lf$/m);
+});
