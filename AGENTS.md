@@ -22,11 +22,11 @@
 2. 涉及本地安装/编译/服务：先读 `..\tool-library\本机环境一句话.md` 识别机器，再读对应 `machines/` 页。
 3. 交付/复检前：跑统一验证入口 + tool-library 机器验（`python tools/checks.py --json`，在 `..\tool-library` 下运行）。
 
-## 统一验证入口
+## 统一验证入口（提交态可运行，不依赖 package.json scripts；交付/复检前必跑）
 
 ```powershell
-npm test                 # 单元测试（node --test，当前 61 项）
-npm run test:installer   # Windows 安装器测试
-.\maintenance.ps1 verify # 确定性静态门禁（单测/合同/PS 语法/版本一致/安装夹具）
+node --test "test/*.test.mjs"   # 单元测试（node 直接调用，当前 61 项）
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File test/windows-installer.test.ps1  # Windows 安装器测试
+.\maintenance.ps1 verify        # 完整交付门禁（确定性静态门禁：单测/合同/PS 语法/版本一致/安装夹具）
 # 安装或宿主行为改动另走：.\maintenance.ps1 acceptance（实机验收链，按需）
 ```
