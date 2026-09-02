@@ -82,7 +82,7 @@ Kimi 订阅会话的读数条与每轮徽章会追加官方实时额度读数：
 - id: turn-cost
   name: dsh-turn-cost
   config:
-    ratesPath: C:\Users\Admin\.dsh\turn-cost-rates.json   # 改成你的实际路径
+    ratesPath: <dsh-home>\turn-cost-rates.json   # 改成你的实际路径
 ```
 
 3. 重启 dsh web 生效。

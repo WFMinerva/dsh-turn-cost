@@ -88,10 +88,10 @@ DeepSeek 调价（官网定价页变化）时：
 
 ## 四、本地开发与验证
 
-本机路径（机主环境）：
+本机路径（通用占位符，实际路径因机器而异）：
 
-- 开发仓库：`D:\Workspaces\dsh-turn-cost`（origin 是 SSH：`git@github.com:WFMinerva/dsh-turn-cost.git`；本机直连 github.com 网页可能不通，**SSH 推送正常**）
-- 安装副本：`C:\Users\Admin\.dsh\profiles\web\node_modules\dsh-turn-cost`（npm 装的；改完代码要发版后在此目录 `pnpm add dsh-turn-cost@最新版` 更新，或手工把 `lib/`、`package.json`、`cordis.patch.yml` 覆盖过去）
+- 开发仓库：`<repo-root>`（origin 是 SSH：`git@github.com:WFMinerva/dsh-turn-cost.git`；本机直连 github.com 网页可能不通，**SSH 推送正常**）
+- 安装副本：`<dsh-home>\profiles\web\node_modules\dsh-turn-cost`（npm 装的；改完代码要发版后在此目录 `pnpm add dsh-turn-cost@最新版` 更新，或手工把 `lib/`、`package.json`、`cordis.patch.yml` 覆盖过去）
 - 验证 UI：重启 DSH web，刷新 http://127.0.0.1:3080，看每条 AI 回复下方的灰色金额行
 
 ```bash

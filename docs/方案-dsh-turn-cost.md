@@ -131,7 +131,7 @@
 - `node --check`：lib/index.js、lib/client.js、lib/fold.js 语法全过；client 端另有自建无头冒烟（stub react/ctx 执行 factory + apply + 三组件首渲染，断言 slot 名、locale 键集、投影回退渲染、零用量空渲染）。
 - 真实日志抽查（只读 smoke，`%TEMP%\turn-cost-smoke.mjs`）：枚举到 150 个会话全部可折叠；抽 5 个会话（含 366 步的大会话）四桶总量与 `storages/session_projcache.json` 的官方 tokenUsage 投影**逐桶 MATCH 5/5**；按天分组输出正常。
 - 踩坑：①Windows 临时目录首跑触发杀软扫描，listSessions 单测首跑 ~36s、复跑 <100ms（环境噪声）；②ESM import Windows 绝对路径必须 file:// URL；③tierCost 必须容忍样本缺桶字段（Number(x)||0），否则 NaN；④**client bundle 覆盖到 profile 后无需重启即热更新**（dsh-client-hmr 常驻 stat-poll，rev 变化即重载；实测 `GET /plugins/dsh-turn-cost/client.js` 立即返回新版）——但 host 端端点仍须重启 dsh web。
-- 本机部署：profile 副本已同步 0.2.0（lib/package.json/cordis.patch.yml 手工覆盖）；机主费率表已落 `C:\Users\Admin\.dsh\turn-cost-rates.json`（Allegro 四模型 + Token Plan 十三模型全 0 价登记 + qwen 池 deepseek 作用域键）；profile `cordis.patch.yml` 同 id 覆盖 ratesPath。
+- 本机部署：profile 副本已同步 0.2.0（lib/package.json/cordis.patch.yml 手工覆盖）；机主费率表已落 `<dsh-home>\turn-cost-rates.json`（Allegro 四模型 + Token Plan 十三模型全 0 价登记 + qwen 池 deepseek 作用域键）；profile `cordis.patch.yml` 同 id 覆盖 ratesPath。
 - **K3 独立模型审第 1 轮（codex 0.146.0，只读沙箱）**：结论「需修改」——核心五项（fold 不变式、装饰器转译、RPC wire、client 约束、summary 聚合）静态核验全过；3 项实质 + 3 项建议，逐项修复如下：
   1. package.json `files` 白名单补 `rates.example.json`（出厂示例随 npm 分发）✅
   2. sessionId 路径校验：fold.js 新增 `isValidSessionId`（`^[A-Za-z0-9._-]+$`），`findSessionFile` 加 resolve 根前缀包含检查（纵深防御），query/sessionTotals 入口改用该校验 ✅（附单测）
@@ -321,7 +321,7 @@ B 轻流程（改 bug）：门一已对齐范围；改动仅 3 个产物文件 +
   - 汇总面板 `quota.window.line`：`已用 {used}/{limit} 次 · 还剩 {remaining} 次 · {resetAt} 重置`（次数口径）；
   - zh/en locale 同步；title 文案说明"剩余次数为官方实时读数，不把请求次数伪装成额度消耗"。
 - 阿里 qwen 段不变（官方给的就是 usedPercent/remainingPercent 比例，且 Credits 无法精确归因，保持百分比口径）。
-- 同步物：部署副本 `C:\Users\Admin\.dsh\profiles\web\node_modules\dsh-turn-cost\lib\client.js`（当前 DSH 加载的就是它）、`~/.dsh/turn-cost-installer-package/payload/dsh-turn-cost-0.4.0.tgz`、桌面解压目录 payload 与 manifest/content-sha256 哈希、桌面 `dsh-turn-cost-setup-0.4.0-win-x64-fixed.zip` 重打包（15/15 哈希校验通过）。
+- 同步物：部署副本 `<dsh-home>\profiles\web\node_modules\dsh-turn-cost\lib\client.js`（当前 DSH 加载的就是它）、`~/.dsh/turn-cost-installer-package/payload/dsh-turn-cost-0.4.0.tgz`、桌面解压目录 payload 与 manifest/content-sha256 哈希、桌面 `dsh-turn-cost-setup-0.4.0-win-x64-fixed.zip` 重打包（15/15 哈希校验通过）。
 
 ### 复检
 
@@ -352,7 +352,7 @@ B 轻流程（改 bug）：门一已对齐范围（机主确认"只显官方余�
 - `lib/index.js`：`fetchKimiQuota` 按 baseUrl 分流——https（默认）→ 官方 API + `.credentials.yaml` 凭据；loopback → 本地 OAuth。恢复 `resolveCredentialValue`（.credentials.yaml refs 行解析，值只在内存）与 `credentialsFile` 字段；错误码细分为 `kimi-credential-not-found` / `kimi-api-unavailable` / `kimi-server-token-not-found` / `kimi-server-unavailable` / `kimi-output-unrecognized`。
 - `lib/client.js`：仅文案——badge/dock quotaTitle 由「本地 OAuth 服务」改为「官方读数（coding API 或本地 OAuth 服务）」；渲染逻辑 0.4.0 已按 windows[].remaining 显示次数，无需改。
 - **0.4.0 代码回库**：fold.js/index.js/client.js/quota.js/package.json（0.4.0）从部署副本同步回仓库，漂移消除；新增 `test/quota.test.mjs`（官方 API/loopback/aliyun 三种解析 5 项）。
-- `C:\Users\Admin\.dsh\turn-cost-rates.json`：quota 块注释改新口径（kimi 官方 API 优先 + loopback 备选；qwen 需 bl console + open-api AK/SK）。
+- `<dsh-home>\turn-cost-rates.json`：quota 块注释改新口径（kimi 官方 API 优先 + loopback 备选；qwen 需 bl console + open-api AK/SK）。
 - **文档同步（机主跟进要求）**：README/CHANGELOG/DEVELOPMENT/rates.example.json 从 0.3.0 口径更新到 0.4.0——CHANGELOG 补 0.4.0 条目；README 改 Kimi 次数口径示例、补双路径与 AK/SK 自动续期说明、内置路由说明；DEVELOPMENT #17/#20 改口径 + 新增 #21 双路径决策 + §七 quota 维护要点更新；rates.example.json quota 注释同步。
 
 ### 验证

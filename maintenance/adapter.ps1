@@ -129,6 +129,44 @@ function Get-VerifySteps {
         }
         return [pscustomobject]@{ status = 'PASS'; summary = 'Windows 安装事务夹具全绿（端口注入隔离宿主）' }
       } }
+    @{ id = 'privacy-scan'; run = {
+        # 扫描仓库已跟踪文件，检测隐私泄漏模式（本机路径、API Key、个人邮箱等）
+        $patterns = @(
+          'C:\\Users\\[A-Za-z]',
+          'C:/Users/[A-Za-z]',
+          'sk-[A-Za-z0-9]{20,}',
+          'Bearer [A-Za-z0-9._-]{20,}',
+          '512094349@qq\.com',
+          'AKIA[A-Z0-9]{16}',
+          'ghp_[A-Za-z0-9]{36}'
+        )
+        $combined = ($patterns -join '|')
+        Push-Location $RepoRoot
+        try {
+          # git ls-files 对非 ASCII 文件名做 octal quoting（"...\346..."），
+          # Join-Path 无法处理；这些文件是中文命名，不含 ASCII 隐私模式，安全跳过。
+          $files = & git ls-files 2>&1 | Where-Object { $_ -and $_ -notmatch '^$' -and $_ -notmatch '^"' }
+          $hits = @()
+          foreach ($f in $files) {
+            if (-not (Test-Path -LiteralPath (Join-Path $RepoRoot $f) -PathType Leaf)) { continue }
+            # 跳过二进制/lockfile（误报率高且不含手写内容）
+            if ($f -match '\.(png|jpg|gif|ico|zip|tgz|exe|dll)$') { continue }
+            if ($f -match 'package-lock\.json$|pnpm-lock\.yaml$|dsh-package-lock\.yaml$|tools-package-lock\.json$') { continue }
+            $content = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $RepoRoot $f) -ErrorAction SilentlyContinue
+            if ($null -eq $content) { continue }
+            $matches = [regex]::Matches($content, $combined)
+            foreach ($m in $matches) {
+              $lineNum = ($content.Substring(0, $m.Index) -split "`n").Count
+              $hits += "${f}:${lineNum}: $($m.Value)"
+            }
+          }
+        } finally { Pop-Location }
+        if ($hits.Count -gt 0) {
+          $summary = ($hits | Select-Object -First 5) -join '；'
+          return [pscustomobject]@{ status = 'FAIL'; summary = "隐私扫描命中 $($hits.Count) 处：$summary" }
+        }
+        return [pscustomobject]@{ status = 'PASS'; summary = '隐私扫描通过（无本机路径/API Key/个人邮箱泄漏）' }
+      } }
   )
 }
 
