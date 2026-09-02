@@ -114,6 +114,12 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\build-windows-
 
 用真实日志抽查（node 一行脚本）：读某会话的 `session.jsonl.zstd` → `readSessionSamples("<sessions根目录>", "<sessionId>")` → `costOfTurn(samples, 轮号)`，核对 token 数与金额。
 
+### CI 平台差异约定（2026-09-02 教训）
+
+GitHub Actions 的 Test workflow 有两个 job：ubuntu-latest 跑全量 `node --test`（含 `test/route-fixtures.test.mjs`），windows-latest 跑 `maintenance.ps1 verify`。**本机（Windows）单测全绿 ≠ ubuntu CI 全绿**——凡测试 fixture 依赖 Windows 专属可执行体（`.cmd`/`.bat` shim、`cmd.exe` 语义）时，ubuntu runner 无法执行，会直接红。
+
+规则：测试若真要执行 Windows npm shim（如 pinned `bl.cmd`），必须显式标 Windows-only（非 win32 跳过，原因写清楚），而不是假装造一个 POSIX 变体去测一个部署里不存在的场景——本插件只部署在 Windows。写法见 `test/route-fixtures.test.mjs` 的 pinned bl.cmd 用例（`skip: process.platform !== "win32" && "..."`）。Windows 侧的真正覆盖由 windows-latest job 的 verify 承担。
+
 ## 五、发布流程
 
 1. `package.json` 里 bump `version`，CHANGELOG 记一笔；
