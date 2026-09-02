@@ -664,7 +664,7 @@ B 轻流程（改 bug）：门一已对齐范围（机主拍板：Qwen 走 bl+AK
 
 ### 状态
 
-普通变更升级为高风险变更（删除 host `turnCost/summary` 端点=接口契约变化 + 跨机部署）。门一范围/门二方案均由机主逐项拍板（对话对齐：去掉汇总面板、Kimi 走 loopback+自动拉起 K2、总余额=加油包余额、Qwen 认死 bl 路径、本机新 clone 开发）；本记录落盘时处于门三交付前。
+普通变更升级为高风险变更（删除 host `turnCost/summary` 端点=接口契约变化 + 跨机部署）。门一范围/门二方案均由机主逐项拍板（对话对齐：去掉汇总面板、Kimi 走 loopback+自动拉起 K2、总余额=加油包余额、Qwen 认死 bl 路径、本机新 clone 开发）；**门三已确认（2026-09-02 机主目检 + 本机四条链路实测，见下「验证」）**。
 
 ### 需求（机主原话要点）
 
@@ -685,12 +685,30 @@ B 轻流程（改 bug）：门一已对齐范围（机主拍板：Qwen 走 bl+AK
 4. `fetchAliyunQuota` 默认命令优先 `toolsBin/bl.cmd`（固定版本），否则回退 PATH `bl`。
 5. 版本 0.4.2 → **0.5.0**（含 CHANGELOG/package-lock 同步）。
 
-### 验证（门三前，本机）
+### 验证（门三，2026-09-02 本机实机）
 
+**代码门禁**：
 - `node --test` **65/65**（新增：badge 7d 无加油包、badge 带加油包、ensureKimiServer 非默认端口不拉起、工具缺失不拉起、bl 固定路径取数）。
 - `maintenance.ps1 verify` **5/5 PASS**（vendor 完整性/PS 语法/65 单测/版本一致/Windows 安装夹具）。
-- 待部署后实机验证：badge 金额、dock 读数、Kimi 7d+总余额、Qwen 剩余 % 四条链路 + 直接 `dsh web`（不经启动器）Kimi/Qwen 均显示。
+- `maintenance.ps1 build` 出 `dist/dsh-turn-cost-setup-0.5.0-win-x64.zip`，SHA-256 `7CA4DB9787317CE02D0D6D85AD84F1EA6149D36ECF8CD9702C7EB12F8472F499`。
+
+**部署（单位机）**：因 DSH 由 PowerShell 终端反复拉起、安装器 3080 空闲检查无法满足，改走手工部署路径（机主拍板）：0.4.0 完整备份至 `~/.dsh/backups/dsh-turn-cost-manual-0.4.0-20260902T123719/`（tgz+代码+package.json，可回滚）→ 0.5.0 tgz 入 payload → profile package.json 依赖改指 `dsh-turn-cost-0.5.0-e55e02e190b6.tgz` → `pnpm install` 更新 node_modules → 重启 DSH。部署后 `lib/` 四文件与仓库提交哈希逐一 match。
+
+**四条链路实测（重启后真实 RPC 直调 3080 `/api/<endpoint>`，wire 信封 `{type:client-request, rpcId, method, payload:{args:{request}}}`）**：
+| 链路 | 实测结果 |
+|---|---|
+| 汇总面板移除 | `turnCost/summary` → **HTTP 404** ✅；served client bundle（`/plugins/dsh-turn-cost/client.js`）无 `SummaryButton`/`summary.*`/header 槽 ✅ |
+| Kimi badge/dock | `turnCost/quota` 返回 7d 窗口剩余 **97/100** · 加油包余额 **¥19.00**（月度上限 ¥1000）；纯 kimi 会话 `turnCost/query` provider=`kimi-coding`、cost=0（订阅制只显 token）✅ |
+| Qwen 剩余 % | `per1WeekPercentage 0.262588068` → 剩余 **73.74%**，到期 2026-09-08 ✅ |
+| DeepSeek 金额 | `turnCost/sessionTotals` 正常（deepseek-v4-pro 会话 ¥1.65，47 步全计价，priced=47/unpriced=0）✅ |
+
+**登录与环境踩坑（如实记录）**：
+- kimi 0.38 `kimi login`（device flow）**不生成** `~/.kimi-code/server.token`，`kimi web --no-open --port 58627` 启动后才生成——0.5.0 的 `ensureKimiServer` 先拉起服务再读 token 的时序天然正确；启动器「先 login 后读 token」的旧假设在 kimi 0.38 下不成立（0.4.2 未暴露因启动器会在 login 后拉服务）。
+- `~/.kimi-code/config.toml` 带 UTF-8 BOM 被 kimi 0.38 TOML 解析器拒绝（`Invalid TOML`），字节级去 BOM 修复，备份 `config.toml.bom-backup-20260902T123054`。
+- bl CLI 已有 Console 配置但会话过期（error 3），`bl auth login --console --console-site domestic` 浏览器 OAuth 后生效；沙箱环境自动开浏览器失败，手动打开打印 URL 完成。
+
+**机主目检**：页面刷新后「额度汇总」按钮消失，Kimi 会话 badge 显示 7 天剩余与余额（2026-09-02 机主确认）。
 
 ### 推送边界
 
-未推送；推送仅凭机主明说「推送」。
+未推送（本地提交 `f117164`）；推送仅凭机主明说「推送」。
