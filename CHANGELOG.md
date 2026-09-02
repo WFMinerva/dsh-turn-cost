@@ -2,6 +2,22 @@
 
 本文件按 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 维护，版本号遵循语义化版本。
 
+## [0.5.0] - 2026-09-02
+
+### Removed
+
+- **移除「额度汇总」面板**（会话页头 `conversation.session.header.actions` 的「额度汇总」按钮 + 跨对话合计/按模型/按天三张表）：实测在会话量大的机器上全量枚举 150+ 会话需约 27 秒且客户端无超时提示，用户判定该功能无用。host 端 `turnCost/summary` 端点与 `summaryCache`/`foldEntry` 同步删除；`lib/client.js` 的 `SummaryButton`/`SummaryTable`/`QuotaSection`、`summary.*`/`quota.*` 文案与面板样式一并移除。
+
+### Changed
+
+- **Kimi 徽章与读数条口径改为 7 天周额度 + 加油包余额**：每轮徽章与会话读数条显示「7 天还剩 N 次 · 余额 ¥X」（官方 loopback 实时读数）；不再以 5h 滚动窗口为主读数（5h 窗口仍在 quota 响应中，UI 不再占用主位）。
+- **Kimi loopback 服务自动拉起（K2）**：默认端口 `127.0.0.1:58627` 上服务未运行时，插件用 `~/.dsh/turn-cost-tools` 里固定版本的 kimi CLI 自动启动（`kimi web --no-open --port 58627`），只管理自己启动的实例、插件卸载时经官方 `/api/v1/shutdown` 关闭；直接启动 DSH（不经「启动 DSH（含额度）」启动器）也能读到 Kimi 额度。端口被他人占用时不触碰。
+- **阿里 bl 默认认死固定路径**：`fetchAliyunQuota` 默认命令优先用 `~/.dsh/turn-cost-tools/node_modules/.bin/bl.cmd`（固定版本、不依赖系统 PATH），未安装时才回退 PATH 上的 `bl`；rates 文件 `quota` 块的 `command` 仍可覆盖。
+
+### Security
+
+- Kimi 服务自动拉起仅在本机 loopback 默认端口、且存在有效 `server.token` 时发生；凭证仍只在本机进程内使用，不打印、不复制、不写入报告或仓库。
+
 ## [0.4.2] - 2026-08-25
 
 ### Fixed

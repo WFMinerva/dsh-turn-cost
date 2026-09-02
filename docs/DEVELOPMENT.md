@@ -137,8 +137,8 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\build-windows-
 10. **为什么历史 commit 的 author 是旧中文名却不改？** 公开仓库、已被社区 list 收录，改写历史会破坏 fork 与引用；新 commit 用新署名，新旧共存属正常现象。
 11. **为什么费率表是"叠加"而不是"替换"？**（0.2.0）自定义 rates.json 经 `mergeRates(builtinRates(), custom)` 按模型名逐项覆盖内置官方卡：用户只写自己关心的模型，DeepSeek 官方价永远兜底；文件缺失/损坏回退内置卡并记 warn，插件不死。
 12. **为什么订阅制模型在费率表里配 0 价而不是缺席？** 缺席 = `unpriced`（语义：未知价，绝不编造）；配 0 = 价格已知为 0（订阅口径）且计入 `priced`。两者在汇总里分开统计，避免"有价的 0"和"没价"混为一谈。
-13. **为什么跨对话汇总走 host 端枚举日志，而不是 client 端 `useSessions` 投影？** 会话摘要行的 `projectionValues.tokenUsage` 只有四桶聚合值，**无时间戳、无模型名**；"按天/按模型"分组必须有 (time, model, buckets) 粒度的样本，只有扫日志拿得到。纯 client 路径被调研后否决（调研记录见 tool-library `docs/方案-DSH对话额度表.md`）。
-14. **为什么汇总按会话粒度签名缓存，而不是整表一个签名？** 150+ 会话全量解压只有首次贵；`summaryCache` 以 `sessionId → size:mtime|live事件数` 为签名，重复打开汇总面板只重算变化过的会话。
+13. **为什么跨对话汇总走 host 端枚举日志，而不是 client 端 `useSessions` 投影？**（已废弃：0.5.0 移除汇总面板）会话摘要行的 `projectionValues.tokenUsage` 只有四桶聚合值，**无时间戳、无模型名**；"按天/按模型"分组必须有 (time, model, buckets) 粒度的样本，只有扫日志拿得到。纯 client 路径被调研后否决（调研记录见 tool-library `docs/方案-DSH对话额度表.md`）。0.5.0 起该功能整体移除——150+ 会话全量枚举约 27 秒且客户端无超时提示，机主判定无用。
+14. **为什么汇总按会话粒度签名缓存，而不是整表一个签名？**（已废弃：0.5.0 移除汇总面板）150+ 会话全量解压只有首次贵；`summaryCache` 以 `sessionId → size:mtime|live事件数` 为签名，重复打开汇总面板只重算变化过的会话。
 15. **为什么会话级读数条挂 `conversation.composer.dock`？** 官方注释明确该 list 槽位就是统计条所在的环境读数带（"the shipped stats line lives here"），并列共存不替换；`conversation.chat.turnTail` 照旧禁用。
 16. **为什么读数条的 token 口径可以直接对比官方统计条？** 官方 `tokenUsage` 投影的 `uncachedInputTokens` 就是 provider 上报的 `usage.inputTokens`（dsh-client-connection `tokenUsageOf` 实现），与 fold.js 的 `inputTokens` 桶同源；0.2.0 实测 5 个真实会话逐桶 MATCH。
 17. **为什么「还剩多少」读平台端点、且不显示「本对话占比」？**（0.3.0 门二 v2 → 0.4.0 改口径）0.3.0 曾按请求数算「本会话占比」（本地日志里落在当前窗口的调用数 ÷ 窗口上限），但该占比是**估计值**（DSH 日志调用步数与平台计费请求数非严格 1:1，SDK 重试/缓存命中/续接重放的步可能不被计作新请求），且与官方 used 读数对不上（实测本地 62 次 vs 官方 53）。0.4.0 起**移除占比显示**，只显官方实时剩余次数/比例；剩余必须取平台实时值——同一池子还被 Kimi CLI/桌面端消耗，本地日志看不见它们。端点成功 60s TTL 缓存、失败 10s 防打爆。
@@ -149,10 +149,12 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\build-windows-
 
 ## 七、0.2.0 新增件的维护要点
 
-- **新增 `@Remote` 端点**：照抄 `lib/index.js` static 块里 `sessionTotals`/`summary` 的 `__esDecorate` 调用（先声明 `_xxx_decorators` 变量再装饰），参数名 `request` 是 wire 协议的一部分。
+- **新增 `@Remote` 端点**：照抄 `lib/index.js` static 块里 `sessionTotals`/`quota` 的 `__esDecorate` 调用（先声明 `_xxx_decorators` 变量再装饰），参数名 `request` 是 wire 协议的一部分。
 - **费率表 schema**（`rates.json`，version 1）：`{ currency, models: { <model>: 平价{input,cacheRead,cacheWrite?,output} | 峰谷{peak,offPeak} }, aliases }`；schema 演进时 bump `RATES_VERSION`（fold.js）并写迁移说明。
 - **`listSessions` 的目录约定**：`<dsh-home>/sessions/<workspace>/<sessionId>/session.jsonl.zstd`；目录不可读/文件缺失一律跳过，枚举永不抛。
 - **单测里的临时目录**：Windows 上首次 `mkdtemp`+写删可能触发杀软扫描（首跑 ~36s，之后 <100ms），属环境噪声不是回归。
 - **host 端改动需重启 dsh web 生效**（web profile 禁用 host 插件 HMR）；client bundle（client.js）覆盖到 profile 后由常驻 HMR 热更新（rev 变化触发，React 状态不保留）。
 - **Config/schema 只能用 schemastery 语法**：`z` 是 `@deepseek-ai/schemastery` 不是 zod——对象字段缺省即可选，**没有 `.optional()`/`.nullable()`/`.parse()` 这些 zod 链式方法**；误用会在插件 import 阶段静态初始化器抛错，cordis 整树拒载、**dsh web 启动直接崩**（2026-08-24 实锤，见方案文档变更记录 #4）。改 Config 后必须真实启动一次 dsh web 验证——单测覆盖不到 host 侧。
-- **quota 端点（0.4.2）**：`turnCost/quota` 平台读数 TTL 缓存（成功 60s / 失败 10s）；Kimi 只走 loopback `GET /api/v1/oauth/usage`（`normalizeKimiLocalUsage`），阿里走固定参数的 `bl usage token-plan --output json`（`normalizeAliyunBl`）。稳定错误码为 `kimi-server-token-not-found`/`kimi-server-unavailable`/`kimi-output-unrecognized`/`bl-not-found`/`bl-failed`/`bl-output-not-json`/`bl-output-unrecognized`。
+- **quota 端点（0.5.0）**：`turnCost/quota` 平台读数 TTL 缓存（成功 60s / 失败 10s）；Kimi 只走 loopback `GET /api/v1/oauth/usage`（`normalizeKimiLocalUsage`），阿里走固定参数的 `bl usage token-plan --output json`（`normalizeAliyunBl`）。稳定错误码为 `kimi-server-token-not-found`/`kimi-server-unavailable`/`kimi-output-unrecognized`/`bl-not-found`/`bl-failed`/`bl-output-not-json`/`bl-output-unrecognized`。
+- **Kimi 服务自动拉起（0.5.0，K2）**：`fetchKimiQuota` 前先 `ensureKimiServer(baseUrl)`——默认端口 `127.0.0.1:58627` 上服务未健康且端口未被他人占用时，用 `~/.dsh/turn-cost-tools/node_modules/.bin/kimi.cmd`（固定版本）spawn `kimi web --no-open --port 58627`，20s 内轮询 `/api/v1/healthz`；超时则关闭自己启动的实例。`kimiChild` 记录本插件启动的子进程，卸载时 `stopSelfKimiServer` 先经官方 `/api/v1/shutdown` 再 kill。非默认端口或工具缺失一律不拉起（降级为 `kimi-server-unavailable`）。
+- **阿里 bl 默认路径（0.5.0，C 方案）**：`fetchAliyunQuota` 的默认命令优先 `~/.dsh/turn-cost-tools/node_modules/.bin/bl.cmd`（`toolsBin` 存在且文件在位时），否则回退 PATH 上的 `bl`；`quota` 块的 `command` 仍可覆盖。

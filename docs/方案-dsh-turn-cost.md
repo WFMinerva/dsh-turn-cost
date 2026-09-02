@@ -659,3 +659,38 @@ B 轻流程（改 bug）：门一已对齐范围（机主拍板：Qwen 走 bl+AK
 - 独立模型首轮复检发现并阻断两处一致性问题：README/示例费率仍残留 `--open-api` 存 AK/SK 指引；启动器/登录辅助未与 host 一致解析 `KIMI_CODE_HOME`。现已删除现行文档中的 AK/SK 路线，统一 token home，并把 Kimi CLI 非零退出降为明确 `AUTH_PENDING`（token 为空仍失败），不再误报 `AUTH_OK`。
 - PR 首轮 CI 的 Linux job 通过，Windows job 暴露 checkout 将受哈希保护的 vendor 文本换行为 CRLF，导致 11 文件逐字节哈希不符；新增 `.gitattributes` 固定 `vendor/maintenance/**` 与 manifest 为 LF，并加入合同测试。
 - 修正后的最终制品为 `dist/dsh-turn-cost-setup-0.4.2-win-x64.zip`，SHA-256 `FD0FDEB2EC8017B41D9D545F61C414BE40870D79AF3604B60155678C8E5726A9`；内容清单 SHA-256 `B09E56AB9E61A7C4FCA02B3E470820C1FB20D123F7385C40B6D1BF5B4FA721D7`。`npm pack --dry-run --ignore-scripts` 通过；根仓库门禁 0 FAIL。未取得 CI 结果前不合并 `master`。
+
+## 变更记录 #14（2026-09-02，0.5.0：移除额度汇总面板 + Kimi 自动拉起 + 阿里 bl 固定路径）
+
+### 状态
+
+普通变更升级为高风险变更（删除 host `turnCost/summary` 端点=接口契约变化 + 跨机部署）。门一范围/门二方案均由机主逐项拍板（对话对齐：去掉汇总面板、Kimi 走 loopback+自动拉起 K2、总余额=加油包余额、Qwen 认死 bl 路径、本机新 clone 开发）；本记录落盘时处于门三交付前。
+
+### 需求（机主原话要点）
+
+- 「额度汇总功能无用，点开只有『对话额度汇总 汇总中…… 关闭』。去掉吧，或者看为啥没生效」→ 排查结论：本机 198 会话/282MB 全量枚举约 27 秒，客户端无超时提示，非逻辑损坏。机主拍板**去掉**。
+- 「KIMI 还得显示七天余额和总余额」→ 对齐后：Kimi 显示 **7 天周额度剩余 + 加油包总余额（¥）**；「会员月总额度池剩余」经数据源核对不存在于 loopback/coding API（仅 web cookie 端点可得），按机主拍板落地为加油包余额。
+- 「想正常开 dsh 也能显示」→ Kimi 服务自动拉起（K2）；Qwen 认死 `~/.dsh/turn-cost-tools` 固定版本 bl（C 方案），不依赖系统 PATH。
+
+### 基线
+
+- 基线提交：`428dcbe`（门三确认最终状态同步）；工作区干净；`node --test` 61 项全过。
+- 本机（单位机）部署 0.4.0，`lib/` 四文件 SHA-256 已记录（见 tool-library 会话）；本仓库无本地未提交改动。
+
+### 方案（门二已拍板，2026-09-02）
+
+1. `lib/index.js`：删除 `@Remote("summary")` 端点、`summary` 方法、`summaryCache`、`foldEntry`；移除 `listSessions`/`readSessionEntry`/`beijingDay` 相关 import。
+2. `lib/client.js`：删除 `SummaryButton`/`SummaryTable`/`QuotaSection`/`SUMMARY_DAYS`、header 槽注入、`summary.*`/`quota.*` 文案与面板样式；badge/dock 的 Kimi 读数改为 **7d 窗口剩余 + 加油包余额（¥）**（无加油包时降级只显 7d）。
+3. `fetchKimiQuota` 前先 `ensureKimiServer(baseUrl)`：默认端口服务未健康且未被占用时，用 `~/.dsh/turn-cost-tools/node_modules/.bin/kimi.cmd` spawn `kimi web --no-open --port 58627`，20s 健康轮询，超时关闭自启实例；非默认端口/工具缺失不拉起。卸载时 `stopSelfKimiServer` 经官方 `/api/v1/shutdown` 关闭自己启动的实例。
+4. `fetchAliyunQuota` 默认命令优先 `toolsBin/bl.cmd`（固定版本），否则回退 PATH `bl`。
+5. 版本 0.4.2 → **0.5.0**（含 CHANGELOG/package-lock 同步）。
+
+### 验证（门三前，本机）
+
+- `node --test` **65/65**（新增：badge 7d 无加油包、badge 带加油包、ensureKimiServer 非默认端口不拉起、工具缺失不拉起、bl 固定路径取数）。
+- `maintenance.ps1 verify` **5/5 PASS**（vendor 完整性/PS 语法/65 单测/版本一致/Windows 安装夹具）。
+- 待部署后实机验证：badge 金额、dock 读数、Kimi 7d+总余额、Qwen 剩余 % 四条链路 + 直接 `dsh web`（不经启动器）Kimi/Qwen 均显示。
+
+### 推送边界
+
+未推送；推送仅凭机主明说「推送」。

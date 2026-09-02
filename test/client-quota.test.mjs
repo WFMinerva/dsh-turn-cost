@@ -79,15 +79,34 @@ const baseResult = {
   cost: 0,
 };
 
-test("real client badge selects Kimi 5h data for kimi-coding", () => {
+test("real client badge selects Kimi 7d data for kimi-coding", () => {
   const view = renderBadge(
     { ...baseResult, provider: "kimi-coding" },
-    { routes: { "kimi-coding": { ok: true, windows: [{ name: "5h", limit: 100, used: 20, remaining: 80 }] } } },
+    { routes: { "kimi-coding": { ok: true, windows: [{ name: "7d", limit: 100, used: 20, remaining: 80 }] } } },
+  );
+  assert.match(view.props.title, /^badge\.quotaTitle/);
+  assert.match(view.props.children, /^badge\.quotaNoBooster /);
+  assert.doesNotMatch(view.props.children, /"used":/);
+  assert.match(view.props.children, /"remaining":80/);
+});
+
+test("real client badge shows Kimi booster balance when present", () => {
+  const view = renderBadge(
+    { ...baseResult, provider: "kimi-coding" },
+    {
+      routes: {
+        "kimi-coding": {
+          ok: true,
+          windows: [{ name: "7d", limit: 100, used: 20, remaining: 80 }],
+          booster: { balanceCny: 28.79 },
+        },
+      },
+    },
   );
   assert.match(view.props.title, /^badge\.quotaTitle/);
   assert.match(view.props.children, /^badge\.quota /);
-  assert.doesNotMatch(view.props.children, /"used":/);
   assert.match(view.props.children, /"remaining":80/);
+  assert.match(view.props.children, /"balance":"28\.79"/);
 });
 
 for (const provider of ["qwen-token-plan-cn", "qwen-token-plan"]) {

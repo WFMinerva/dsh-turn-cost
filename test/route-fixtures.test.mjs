@@ -93,6 +93,34 @@ test("Kimi quota fetch uses the official loopback server token path", async (t) 
   assert.equal(result.windows.find((window) => window.name === "5h")?.remaining, 93);
 });
 
+test("ensureKimiServer never starts a server on a non-default port", async () => {
+  const service = { toolsBin: undefined, kimiChild: null, kimiServerTokenFile: "/nonexistent/token" };
+  await TurnCostService.prototype.ensureKimiServer.call(service, "http://127.0.0.1:59999");
+  assert.equal(service.kimiChild, null, "a non-default loopback port is never managed");
+});
+
+test("ensureKimiServer does not start without the pinned kimi CLI", async () => {
+  const service = { toolsBin: undefined, kimiChild: null, kimiServerTokenFile: "/nonexistent/token" };
+  await TurnCostService.prototype.ensureKimiServer.call(service, "http://127.0.0.1:58627");
+  assert.equal(service.kimiChild, null, "missing private kimi CLI means no auto-start attempt");
+});
+
+test("fetchAliyunQuota prefers the pinned bl.cmd under turn-cost-tools when present", async (t) => {
+  const dir = await mkdtemp(join(tmpdir(), "turn-cost-tools-"));
+  const bin = join(dir, "node_modules", ".bin");
+  await import("node:fs/promises").then(async ({ mkdir }) => {
+    await mkdir(bin, { recursive: true });
+  });
+  await writeFile(join(bin, "bl.cmd"), "@echo off\r\nif \"%1\"==\"usage\" echo {\"per1WeekPercentage\":0.375,\"per1WeekResetTime\":1750000000000}\r\n");
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const result = await TurnCostService.prototype.fetchAliyunQuota.call(
+    { toolsBin: bin },
+    { kind: "aliyun-bl" },
+  );
+  assert.equal(result.ok, true);
+  assert.equal(result.remainingPercent, 0.625);
+});
+
 test("Qwen bl normalizes the weekly percentage and remainingPercent", () => {
   const resetMs = Date.parse("2030-01-08T00:00:00.000Z");
   const normalized = normalizeAliyunBl({
