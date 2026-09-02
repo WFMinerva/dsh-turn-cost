@@ -118,7 +118,7 @@ Kimi 订阅会话的读数条与每轮徽章会追加官方实时额度读数：
 
 ### 方式一：Windows 一键包（推荐）
 
-1. 解压 `dsh-turn-cost-setup-0.4.2-win-x64.zip`，双击 `安装.cmd`；不要直接在 ZIP 预览器里运行。
+1. 从 [Releases](https://github.com/WFMinerva/dsh-turn-cost/releases) 下载最新版 `dsh-turn-cost-setup-*-win-x64.zip`，解压后双击 `安装.cmd`；不要直接在 ZIP 预览器里运行。
 2. 安装器会备份 web profile、安装固定插件包与隔离的 DSH/Kimi/百炼 CLI，并生成 `~/.dsh/turn-cost-launcher/启动 DSH（含额度）.cmd`。
 3. 先运行“配置额度登录”：由你在官方页面完成 `kimi login` 与百炼控制台 OAuth。模型 API Key 仍由你在 DSH「设置 → 模型」里手动输入；两层凭据不能互相替代，安装器不会读取或写入 `.credentials.yaml`。
 4. 日常从“启动 DSH（含额度）”启动；它会按需启动 Kimi loopback 服务，再启动 DSH。需要恢复时运行同目录的“回滚上一次安装”或“卸载”。
@@ -126,6 +126,8 @@ Kimi 订阅会话的读数条与每轮徽章会追加官方实时额度读数：
 安装器不需要管理员权限，不改全局 npm、代理、防火墙、系统执行策略或开机任务。完整说明见 ZIP 内 `README-安装说明.txt`。
 
 ### 方式二：npm
+
+> ⚠️ npm 上目前仅发布到 0.1.3（基础金额显示），订阅额度窗口、Kimi 自动拉起等 0.5.0 功能尚未发布。如需最新功能请用方式一或方式三。
 
 ```bash
 dsh plugin --profile web add dsh-turn-cost
