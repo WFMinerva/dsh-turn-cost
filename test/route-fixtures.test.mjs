@@ -105,7 +105,13 @@ test("ensureKimiServer does not start without the pinned kimi CLI", async () => 
   assert.equal(service.kimiChild, null, "missing private kimi CLI means no auto-start attempt");
 });
 
-test("fetchAliyunQuota prefers the pinned bl.cmd under turn-cost-tools when present", async (t) => {
+test("fetchAliyunQuota prefers the pinned bl.cmd under turn-cost-tools when present", {
+  // Windows-only by design: the plugin deploys on Windows and the pinned
+  // npm shim is a .cmd batch file that only cmd.exe can run. On non-win32
+  // CI runners there is no .cmd shim to execute, so skip instead of faking
+  // a POSIX variant that would test a scenario that never happens.
+  skip: process.platform !== "win32" && "pinned bl.cmd shim is Windows-only (plugin deploys on Windows)",
+}, async (t) => {
   const dir = await mkdtemp(join(tmpdir(), "turn-cost-tools-"));
   const bin = join(dir, "node_modules", ".bin");
   await import("node:fs/promises").then(async ({ mkdir }) => {
