@@ -116,7 +116,9 @@ Kimi 订阅会话的读数条与每轮徽章会追加官方实时额度读数：
 
 ## 安装
 
-### 方式一：Windows 一键包（推荐）
+### 方式一：Windows 一键包
+
+> ⚠️ **目前未提供**：本仓库尚未发布任何 Release 资产，Releases 页是空的，因此下面这条路径暂时走不通。长期仍以一键包为首选安装方式；补齐步骤（对齐 `versions.json` 的 DSH 版本 → `maintenance.ps1 verify` → `acceptance` 实机验收 → 构建并上传 ZIP）见 `docs/DEVELOPMENT.md` 与 `maintenance.ps1 build`。**现在请用方式二或方式三。**
 
 1. 从 [Releases](https://github.com/WFMinerva/dsh-turn-cost/releases) 下载最新版 `dsh-turn-cost-setup-*-win-x64.zip`，解压后双击 `安装.cmd`；不要直接在 ZIP 预览器里运行。
 2. 安装器会备份 web profile、安装固定插件包与隔离的 DSH/Kimi/百炼 CLI，并生成 `~/.dsh/turn-cost-launcher/启动 DSH（含额度）.cmd`。
@@ -127,7 +129,7 @@ Kimi 订阅会话的读数条与每轮徽章会追加官方实时额度读数：
 
 ### 方式二：npm
 
-> ⚠️ npm 上目前仅发布到 **0.1.3**（基础金额显示）：订阅额度窗口、Kimi 自动拉起（0.5.0）、Flash 家族重定价与价表时间分档（0.5.1）、DSH 会话格式 V3 日志名适配（0.5.2）均未发布。如需最新功能请用方式一或方式三。
+> ⚠️ npm 上目前仅发布到 **0.1.3**（基础金额显示），**明显落后于本仓库**：订阅额度窗口、Kimi 自动拉起（0.5.0）、Flash 家族重定价与价表时间分档（0.5.1）、DSH 会话格式 V3 日志名适配（0.5.2）均未发布。用这条命令装到的是旧版，如需最新功能请用方式三（方式一一键包当前未提供）。
 
 ```bash
 dsh plugin --profile web add dsh-turn-cost
@@ -136,11 +138,23 @@ dsh plugin --profile web add dsh-turn-cost
 
 然后重启 dsh web 并刷新页面。
 
-### 方式三：本地文件式
+### 方式三：本地打包安装（无 release、无 npm 发布时用这条）
 
-1. 把本仓库整个目录放到 `<dsh-home>/profiles/web/node_modules/dsh-turn-cost/`
-2. 在 `<dsh-home>/profiles/web/package.json` 的 `dsh.profile.bundles` 数组末尾追加 `"dsh-turn-cost"`
-3. 重启 dsh web 并刷新页面
+在本仓库检出目录里打包，再让 profile 用 pnpm 装上——依赖（`@deepseek-ai/schemastery` 等）由 pnpm 按 `package.json` 正常解析，比手工拷贝目录可靠。**Windows 家用机 2026-09-11 实测可用**：
+
+```powershell
+npm pack                                                  # 产出 dsh-turn-cost-<版本>.tgz
+dsh plugin --profile web add <tgz 的绝对路径>              # 例：dsh plugin --profile web add F:/Work/dsh-turn-cost/dsh-turn-cost-0.5.2.tgz
+```
+
+然后：
+
+1. 确认 profile 的 `package.json` 里 `dsh.profile.bundles` 含 `"dsh-turn-cost"`（缺了手动追加到数组末尾）。
+2. 重启 dsh web 并刷新页面（host 端插件不支持热加载，**必须重启**）。
+
+> 说明：`dsh plugin` 是 pnpm 转发器，路径参数**用绝对路径**最稳（转发时命令在 profile 目录下执行）；装完 `dsh.profile.bundles` 若未自动写入，按上面第 1 步补。
+>
+> 不推荐把仓库目录直接拷进 `<dsh-home>/profiles/web/node_modules/dsh-turn-cost/`：本包 `files` 只发布 `lib/`、`cordis.patch.yml`、`rates.example.json`，整仓拷贝会连 `scripts`、`test/`、`docs/` 一起带进去，且**不会安装运行依赖**——真跑起来只能碰巧借用 profile 里别的 bundle 带进来的传递依赖。
 
 ## 开发与维护
 
