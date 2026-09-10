@@ -13,6 +13,7 @@
 ### Notes
 
 - 迁移会话目录同时存在 `session.jsonl.zstd` 与 `session.v3.jsonl.zstd` 时，本插件统一读 **v3**（迁移后的权威记录），旧件仅在无 vN 件时回退。实机抽查该两代文件折叠结果一致（183 样本逐样本 0 差异）。
+- `sessionLogBaseName(generation)` 是**对外的公共 helper**：生产路径（`findSessionFile` / `listSessions`）走目录扫描、由 `pickSessionLogName` 按正则识别两代命名，函数内不调用它；需要由「格式代」反推文件名（例如已从日志头读到版本号）的调用方可以直接用。K3 独立复检指出它与扫描用正则是同一映射的两处表达，**本版不做就地合并**（会改动已批准且已部署的产物），留待下一次升版顺手消除双份真相。
 - 0.1.5 宿主在 Windows 上**不落 `session.lock` 文件**（走内核命名信号量），故目录解析不依赖锁文件。
 - 验证：`node --test "test/*.test.mjs"` **73/73 PASS**（新增 3 项：命名两代映射、混合目录偏好最高版本、v3-only 会话可见性）；真机只读抽查——`listSessions` 枚举 366 个会话（含 10 个 vN 版文件），本会话（v3-only）可读且 `costOfSession` 正常出价（0.44499368 CNY / deepseek-flash）。
 
