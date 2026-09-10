@@ -2,6 +2,20 @@
 
 本文件按 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 维护，版本号遵循语义化版本。
 
+## [0.5.2] - 2026-09-11
+
+### Fixed
+
+- **适配 DSH 会话格式 V3 的版本化日志文件名**（dsh 0.1.5-rc.1 于 2026-09-11 00:52 在本机落地）：会话日志自 v2 起由 `session.jsonl.zstd` 改为 `session.v<N>.jsonl.zstd`，本插件此前把裸名硬编码在 `findSessionFile` / `listSessions` 两处 → 升级后**新建会话的成本与额度读数全部失源**（`listSessions` 静默少列、`findSessionFile` 返回 undefined）。现按「读目录、认两代命名、取最高版本」解析：
+  - 新增 `sessionLogBaseName(generation)`（`0` → `session.jsonl`，`N>0` → `session.v<N>.jsonl`）与 `pickSessionLogName(sessionDir, suffix)`（目录内匹配两代命名并偏好最高版本），两者均导出。
+  - `findSessionFile` / `listSessions` 改用上述解析；**每个会话目录仍只产出一条记录**，迁移后 v0 原件与 v3 新件并存时取 v3（同一会话不会重复计数）。
+
+### Notes
+
+- 迁移会话目录同时存在 `session.jsonl.zstd` 与 `session.v3.jsonl.zstd` 时，本插件统一读 **v3**（迁移后的权威记录），旧件仅在无 vN 件时回退。实机抽查该两代文件折叠结果一致（183 样本逐样本 0 差异）。
+- 0.1.5 宿主在 Windows 上**不落 `session.lock` 文件**（走内核命名信号量），故目录解析不依赖锁文件。
+- 验证：`node --test "test/*.test.mjs"` **73/73 PASS**（新增 3 项：命名两代映射、混合目录偏好最高版本、v3-only 会话可见性）；真机只读抽查——`listSessions` 枚举 366 个会话（含 10 个 vN 版文件），本会话（v3-only）可读且 `costOfSession` 正常出价（0.44499368 CNY / deepseek-flash）。
+
 ## [0.5.1] - 2026-09-10
 
 ### Changed

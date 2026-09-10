@@ -22,6 +22,8 @@ import {
   listSessions,
   isValidSessionId,
   findSessionFile,
+  sessionLogBaseName,
+  pickSessionLogName,
   requestsInWindow,
   builtinQuotaRoutes,
   mergeQuotaRoutes,
@@ -341,6 +343,80 @@ test("listSessions: enumerates <root>/<workspace>/<sessionId>/session.jsonl.zstd
       ["ws-a/s-1", "ws-b/s-3"],
     );
     assert.deepEqual(await listSessions(join(root, "does-not-exist")), []);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+// ── session-log naming generations (v3 / 0.1.5) ─────────────────────────────
+
+test("sessionLogBaseName: generation 0 keeps the bare name, later generations are versioned", () => {
+  assert.equal(sessionLogBaseName(0), "session.jsonl");
+  assert.equal(sessionLogBaseName(1), "session.v1.jsonl");
+  assert.equal(sessionLogBaseName(3), "session.v3.jsonl");
+  // Defensive: junk generations fall back to the bare (oldest) name.
+  assert.equal(sessionLogBaseName(undefined), "session.jsonl");
+  assert.equal(sessionLogBaseName(-1), "session.jsonl");
+  assert.equal(sessionLogBaseName(1.5), "session.jsonl");
+  assert.equal(sessionLogBaseName("3"), "session.v3.jsonl");
+});
+
+test("pickSessionLogName: prefers the highest generation and ignores non-log files", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dsh-turn-cost-"));
+  try {
+    const bare = join(root, "bare");
+    await mkdir(bare, { recursive: true });
+    await writeFile(join(bare, "session.jsonl.zstd"), "x");
+    assert.equal(await pickSessionLogName(bare), "session.jsonl.zstd");
+
+    const v3 = join(root, "v3");
+    await mkdir(v3, { recursive: true });
+    await writeFile(join(v3, "session.v3.jsonl.zstd"), "x");
+    assert.equal(await pickSessionLogName(v3), "session.v3.jsonl.zstd");
+
+    // A migrated session keeps its pre-migration log beside the new one.
+    const mixed = join(root, "mixed");
+    await mkdir(mixed, { recursive: true });
+    await writeFile(join(mixed, "session.jsonl.zstd"), "x");
+    await writeFile(join(mixed, "session.v3.jsonl.zstd"), "x");
+    await writeFile(join(mixed, "session.lock"), "x"); // lock file — not a log
+    assert.equal(await pickSessionLogName(mixed), "session.v3.jsonl.zstd");
+
+    const junk = join(root, "junk");
+    await mkdir(junk, { recursive: true });
+    await writeFile(join(junk, "session.jsonl"), "x"); // uncompressed legacy — not matched
+    await writeFile(join(junk, "session.v0.jsonl.zstd"), "x"); // v0 is spelled bare
+    assert.equal(await pickSessionLogName(junk), undefined);
+
+    assert.equal(await pickSessionLogName(join(root, "does-not-exist")), undefined);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("findSessionFile/listSessions: see v3-only sessions and prefer v3 in a migrated dir", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dsh-turn-cost-"));
+  try {
+    await mkdir(join(root, "ws-old", "s-mixed"), { recursive: true });
+    await writeFile(join(root, "ws-old", "s-mixed", "session.jsonl.zstd"), "x");
+    await writeFile(join(root, "ws-old", "s-mixed", "session.v3.jsonl.zstd"), "xx");
+    await mkdir(join(root, "ws-new", "s-v3"), { recursive: true });
+    await writeFile(join(root, "ws-new", "s-v3", "session.v3.jsonl.zstd"), "x");
+
+    const mixed = await findSessionFile(root, "s-mixed");
+    assert.ok(mixed !== undefined);
+    assert.ok(mixed.file.endsWith("session.v3.jsonl.zstd"));
+    const v3Only = await findSessionFile(root, "s-v3");
+    assert.ok(v3Only !== undefined);
+    assert.ok(v3Only.file.endsWith("session.v3.jsonl.zstd"));
+
+    const found = await listSessions(root);
+    assert.deepEqual(
+      found.map((f) => `${f.workspace}/${f.sessionId}`).sort(),
+      ["ws-new/s-v3", "ws-old/s-mixed"],
+    );
+    // Exactly one entry per session dir — the two generations never double-count.
+    assert.equal(found.length, 2);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

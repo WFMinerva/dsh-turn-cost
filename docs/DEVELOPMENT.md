@@ -70,12 +70,12 @@
 
 ### 计费核心不变式（lib/fold.js）
 
-- 会话日志是 zstd 多帧 JSONL（`session.jsonl.zstd`），帧魔数 `28 B5 2F FD`（小端 `0xFD2FB528`），用 node 内置 `node:zlib` 的 `zstdDecompressSync` 解帧。
+- 会话日志是 zstd 多帧 JSONL（`session[.v<N>].jsonl.zstd`；v0 时代是裸名 `session.jsonl.zstd`，v2 起为版本化名，见下条），帧魔数 `28 B5 2F FD`（小端 `0xFD2FB528`），用 node 内置 `node:zlib` 的 `zstdDecompressSync` 解帧。
 - **折叠规则**：按 `(turn, step)` 为键，后到的样本覆盖先到的（流式 chunk 的 usage 样本被该步最终的 `assistant/message` usage 取代）。**求和前必须先折叠**，否则同一步被重复计费。
 - **峰谷价**：官方 CNY 卡（api-docs.deepseek.com/zh-cn/quick_start/pricing/，2026-08-17 起生效）内置于 `OFFICIAL_CNY`（元/百万 token）。工作日高峰 = 9:00–12:00、14:00–18:00 北京时间；2026-08-23 00:00 北京时间起，周六、周日全天为空闲价。`isPeak` 用 UTC 时间戳换算北京时间，不依赖宿主机时区；生效点前仍保留旧的每日峰谷规则。跨峰谷的一轮按**每步实际时间**分别计价。
 - **价表分档（`history`）**：条目可带 `history: [{ before, peak, offPeak }]`——`before` 之前的样本用该历史卡，其余用条目自身的当前价；`effectiveRateEntry(entry, time)` 负责选档，`costOfStep` 对带 `history` 但无 `time` 的样本返回 null（**不猜档**，与「未知模型不编造」同源）。官方案例：Flash 家族 2026-09-10 12:00 重定价，旧卡 `FLASH_CARD_2026_08_17` 挂在 `history` 里，历史会话金额不被新价重算。
 - **未知模型**：`costOfStep` 返回 null，该步计入 `unpriced`、从金额里剔除——**绝不编造价格**，宁可不计价。
-- **数据源**：持久日志在 `<dsh-home>/sessions/<workspace>/<sessionId>/session.jsonl.zstd`；host 把它与运行中会话的 live 事件合并（同 `(turn, step)` live 胜出），签名缓存（`size:mtime` + live 事件数）失效重算。
+- **数据源**：持久日志在 `<dsh-home>/sessions/<workspace>/<sessionId>/session[.v<N>].jsonl.zstd`；host 把它与运行中会话的 live 事件合并（同 `(turn, step)` live 胜出），签名缓存（`size:mtime` + live 事件数）失效重算。
 
 ## 三、官方价表更新流程
 
@@ -116,7 +116,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\test\windows-installer
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\build-windows-installer.ps1
 ```
 
-用真实日志抽查（node 一行脚本）：读某会话的 `session.jsonl.zstd` → `readSessionSamples("<sessions根目录>", "<sessionId>")` → `costOfTurn(samples, 轮号)`，核对 token 数与金额。
+用真实日志抽查（node 一行脚本）：读某会话的 `session[.v<N>].jsonl.zstd` → `readSessionSamples("<sessions根目录>", "<sessionId>")` → `costOfTurn(samples, 轮号)`，核对 token 数与金额。
 
 ### CI 平台差异约定（2026-09-02 教训）
 
@@ -163,7 +163,8 @@ GitHub Actions 的 Test workflow 有两个 job：ubuntu-latest 跑全量 `node -
 - **新增 `@Remote` 端点**：照抄 `lib/index.js` static 块里 `sessionTotals`/`quota` 的 `__esDecorate` 调用（先声明 `_xxx_decorators` 变量再装饰），参数名 `request` 是 wire 协议的一部分。
 - **费率表 schema**（`rates.json`，version 1）：`{ currency, models: { <model>: 平价{input,cacheRead,cacheWrite?,output} | 峰谷{peak,offPeak} }, aliases }`；schema 演进时 bump `RATES_VERSION`（fold.js）并写迁移说明。
 - **费率表可选 `history`（0.5.1，纯增字段，version 不变）**：条目可再加 `history: [{ before, peak, offPeak }]`，语义与内置表一致（`before` 之前用该档）；用户写了 `history` 就与内置条目同等对待。注意**平价覆盖会连带丢掉内置历史档**——用户若只想改当前价又不想丢历史精度，应写 `history` 而不是整条替换（`rates.example.json` 的 `deepseek-v4-flash` 条目有提示文案）。
-- **`listSessions` 的目录约定**：`<dsh-home>/sessions/<workspace>/<sessionId>/session.jsonl.zstd`；目录不可读/文件缺失一律跳过，枚举永不抛。
+- **`listSessions` 的目录约定**：`<dsh-home>/sessions/<workspace>/<sessionId>/session[.v<N>].jsonl.zstd`；目录不可读/文件缺失一律跳过，枚举永不抛。
+- **会话日志命名两代（0.5.2）**：`sessionLogBaseName(generation)` 给出基名（`0` → `session.jsonl`，`N>0` → `session.v<N>.jsonl`），`pickSessionLogName(sessionDir, suffix)` 扫目录并**偏好最高版本**（迁移后的会话目录里 v0 原件与 v3 新件并存，取新版；一个目录仍只产出一条记录，不重复计数）。宿主侧 Windows **不落 `session.lock`**（内核命名信号量），解析不依赖锁文件。新增格式代（v4…）时该正则自动兼容，无需再改。
 - **单测里的临时目录**：Windows 上首次 `mkdtemp`+写删可能触发杀软扫描（首跑 ~36s，之后 <100ms），属环境噪声不是回归。
 - **host 端改动需重启 dsh web 生效**（web profile 禁用 host 插件 HMR）；client bundle（client.js）覆盖到 profile 后由常驻 HMR 热更新（rev 变化触发，React 状态不保留）。
 - **Config/schema 只能用 schemastery 语法**：`z` 是 `@deepseek-ai/schemastery` 不是 zod——对象字段缺省即可选，**没有 `.optional()`/`.nullable()`/`.parse()` 这些 zod 链式方法**；误用会在插件 import 阶段静态初始化器抛错，cordis 整树拒载、**dsh web 启动直接崩**（2026-08-24 实锤，见方案文档变更记录 #4）。改 Config 后必须真实启动一次 dsh web 验证——单测覆盖不到 host 侧。

@@ -68,7 +68,7 @@ Kimi 订阅会话的读数条与每轮徽章会追加官方实时额度读数：
              └─ 整会话求和 → 输入框下方
 ```
 
-- host 端：扫描 dsh 会话日志（`<dsh-home>/sessions/**/session.jsonl.zstd`），与运行中的 live 会话事件合并折叠；通过 Typert Remote 网关暴露 `turnCost/query`、`turnCost/sessionTotals`、`turnCost/quota` 端点
+- host 端：扫描 dsh 会话日志（`<dsh-home>/sessions/**/session[.v<N>].jsonl.zstd`——v0 时代是裸名，v2 起为版本化名，本件认两代并取最高版本），与运行中的 live 会话事件合并折叠；通过 Typert Remote 网关暴露 `turnCost/query`、`turnCost/sessionTotals`、`turnCost/quota` 端点
 - client 端：注册官方 slot `conversation.chat.assistant-actions`（每轮金额/额度读数）、`conversation.composer.dock`（会话累计，与官方统计条同带）
 
 ## 自定义费率表
