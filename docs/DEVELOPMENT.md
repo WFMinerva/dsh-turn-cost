@@ -73,6 +73,7 @@
 - 会话日志是 zstd 多帧 JSONL（`session.jsonl.zstd`），帧魔数 `28 B5 2F FD`（小端 `0xFD2FB528`），用 node 内置 `node:zlib` 的 `zstdDecompressSync` 解帧。
 - **折叠规则**：按 `(turn, step)` 为键，后到的样本覆盖先到的（流式 chunk 的 usage 样本被该步最终的 `assistant/message` usage 取代）。**求和前必须先折叠**，否则同一步被重复计费。
 - **峰谷价**：官方 CNY 卡（api-docs.deepseek.com/zh-cn/quick_start/pricing/，2026-08-17 起生效）内置于 `OFFICIAL_CNY`（元/百万 token）。工作日高峰 = 9:00–12:00、14:00–18:00 北京时间；2026-08-23 00:00 北京时间起，周六、周日全天为空闲价。`isPeak` 用 UTC 时间戳换算北京时间，不依赖宿主机时区；生效点前仍保留旧的每日峰谷规则。跨峰谷的一轮按**每步实际时间**分别计价。
+- **价表分档（`history`）**：条目可带 `history: [{ before, peak, offPeak }]`——`before` 之前的样本用该历史卡，其余用条目自身的当前价；`effectiveRateEntry(entry, time)` 负责选档，`costOfStep` 对带 `history` 但无 `time` 的样本返回 null（**不猜档**，与「未知模型不编造」同源）。官方案例：Flash 家族 2026-09-10 12:00 重定价，旧卡 `FLASH_CARD_2026_08_17` 挂在 `history` 里，历史会话金额不被新价重算。
 - **未知模型**：`costOfStep` 返回 null，该步计入 `unpriced`、从金额里剔除——**绝不编造价格**，宁可不计价。
 - **数据源**：持久日志在 `<dsh-home>/sessions/<workspace>/<sessionId>/session.jsonl.zstd`；host 把它与运行中会话的 live 事件合并（同 `(turn, step)` live 胜出），签名缓存（`size:mtime` + live 事件数）失效重算。
 
@@ -81,10 +82,13 @@
 DeepSeek 调价（官网定价页变化）时：
 
 1. 改 `lib/fold.js` 的 `OFFICIAL_CNY`（窗口变了连 `isPeak` 与对应生效时间常量一起改，并保留历史规则）；
-2. 同步 README「计费口径」里的生效日期与链接；
-3. 写 CHANGELOG、bump 版本号；
-4. 发布 npm（见下）；
-5. 更新本机 profile 里的安装副本并重启 DSH web。
+2. **保留历史规则的做法**：不要把旧价直接删掉——把当前价写进条目顶层（`peak`/`offPeak`），把**被取代的旧卡连同生效时点**塞进该条目的 `history: [{ before: <ms>, peak, offPeak }]`，并导出该时点常量（如 `FLASH_REPRICE_EFFECTIVE_MS`）。同一张官方卡覆盖的**所有模型 id 都要一起改**（含已退役但服务端仍兜底服务的旧名）；全新模型 id 直接给当前价、不要造历史档；
+3. 同步 README「计费口径」里的生效日期与链接；
+4. 写 CHANGELOG、bump 版本号；
+5. 发布 npm（见下）；
+6. 更新本机 profile 里的安装副本并重启 DSH web。
+
+> 已知待办：官方公告 `deepseek-v4-pro` 自 2026-09-14 12:00 北京时间起路由到 V4.1 Flash 并按 Flash 价计费——该切价尚未编码（`lib/fold.js` 内有注释标记），到点前按本流程补一轮。
 
 ## 四、本地开发与验证
 
@@ -152,11 +156,13 @@ GitHub Actions 的 Test workflow 有两个 job：ubuntu-latest 跑全量 `node -
 19. **为什么额度插件不读 `.credentials.yaml`？**（0.4.2 纠错）DSH 中的 Kimi/Qwen API Key 是模型调用凭据，不等于套餐额度凭据。Kimi 额度由 Kimi Code OAuth loopback 提供，Qwen 额度由百炼 CLI 的控制台 OAuth 提供；插件不得解析、复制或重用模型 Key。
 20. **为什么金额不设全局开关、而是按路由分流？**（0.3.0 门三修正）最初门二 v2 拍「金额默认隐藏可配置」，但机主实测发现这会把官方按量 DeepSeek 的金额也藏掉（那是 0.1.3 起就在的正确功能）。修正后：金额跟随「该轮 provider 是否按量计费」——官方按量路由 `cost>0` 即显示 ¥；订阅路由 0 价登记 → 只显 token + 额度读数。不要再引入会覆盖官方按量金额的全局开关。
 21. **为什么 Kimi 额度只保留 loopback OAuth？**（0.4.2）双机实测证明模型 API Key 可以完成推理，却不能可靠读取套餐额度；此前把一次特定凭据的直连成功推广为通用默认是错误判断。唯一受支持的额度路径是 `~/.kimi-code/server.token` + `127.0.0.1:58627/api/v1/oauth/usage`。配置守卫只接受 loopback HTTP，远程 HTTPS、外部 HTTP host 与旧 `credentialRef` 都丢弃。
+22. **为什么价表要按时间分档、而不是直接改数字？**（0.5.1，Flash 重定价）金额徽章对**历史会话**也要显示——直接换数字会让 2026-09-10 12:00 之前的旧会话按新价重算，把已经花掉的钱显示错。分档让「当时生效的卡」可被复现，代价只是每个改价条目多一个 `history` 数组与一组边界测试。这与周末规则「生效点前保留旧规则」是同一条原则；**不要**为了省事把旧卡删掉。
 
 ## 七、0.2.0 新增件的维护要点
 
 - **新增 `@Remote` 端点**：照抄 `lib/index.js` static 块里 `sessionTotals`/`quota` 的 `__esDecorate` 调用（先声明 `_xxx_decorators` 变量再装饰），参数名 `request` 是 wire 协议的一部分。
 - **费率表 schema**（`rates.json`，version 1）：`{ currency, models: { <model>: 平价{input,cacheRead,cacheWrite?,output} | 峰谷{peak,offPeak} }, aliases }`；schema 演进时 bump `RATES_VERSION`（fold.js）并写迁移说明。
+- **费率表可选 `history`（0.5.1，纯增字段，version 不变）**：条目可再加 `history: [{ before, peak, offPeak }]`，语义与内置表一致（`before` 之前用该档）；用户写了 `history` 就与内置条目同等对待。注意**平价覆盖会连带丢掉内置历史档**——用户若只想改当前价又不想丢历史精度，应写 `history` 而不是整条替换（`rates.example.json` 的 `deepseek-v4-flash` 条目有提示文案）。
 - **`listSessions` 的目录约定**：`<dsh-home>/sessions/<workspace>/<sessionId>/session.jsonl.zstd`；目录不可读/文件缺失一律跳过，枚举永不抛。
 - **单测里的临时目录**：Windows 上首次 `mkdtemp`+写删可能触发杀软扫描（首跑 ~36s，之后 <100ms），属环境噪声不是回归。
 - **host 端改动需重启 dsh web 生效**（web profile 禁用 host 插件 HMR）；client bundle（client.js）覆盖到 profile 后由常驻 HMR 热更新（rev 变化触发，React 状态不保留）。

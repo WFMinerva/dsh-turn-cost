@@ -7,6 +7,7 @@ import assert from "node:assert/strict";
 import {
   ZSTD_MAGIC,
   WEEKEND_OFF_PEAK_EFFECTIVE_MS,
+  FLASH_REPRICE_EFFECTIVE_MS,
   isPeak,
   beijingDay,
   foldEvents,
@@ -16,6 +17,7 @@ import {
   builtinRates,
   mergeRates,
   resolveRateEntry,
+  effectiveRateEntry,
   sessionTitleOf,
   listSessions,
   isValidSessionId,
@@ -103,8 +105,78 @@ test("costOfStep: peak vs off-peak at official CNY rates", () => {
 
 test("costOfStep: deepseek-v4-flash-vision-exp is priced at V4 Flash rates", () => {
   const base = { model: "deepseek-v4-flash-vision-exp", turn: 1, step: 1, inputTokens: 1e6, cacheReadTokens: 0, outputTokens: 0, cacheWriteTokens: 0 };
+  // T_PEAK / T_OFF_PEAK are 2026-08-17, i.e. before the 2026-09-10 repricing:
+  // these assertions now also pin the superseded flash card for old samples.
   assert.ok(Math.abs(costOfStep({ ...base, time: T_PEAK }) - 3.0) < 1e-9);
   assert.ok(Math.abs(costOfStep({ ...base, time: T_OFF_PEAK }) - 1.5) < 1e-9);
+});
+
+test("flash repricing: 2026-09-10 12:00 Beijing cutoff switches all three flash names", () => {
+  assert.equal(FLASH_REPRICE_EFFECTIVE_MS, atBeijing(2026, 9, 10, 12));
+  const at = (hour) => atBeijing(2026, 9, 10, hour); // Thursday
+  const input = (model, time) => costOfStep({
+    model, time, turn: 1, step: 1, inputTokens: 1e6, cacheReadTokens: 0, outputTokens: 0, cacheWriteTokens: 0,
+  });
+  // Retired ids: the superseded 2026-08-17 card up to the cutoff, new card after.
+  // Note the cutoff (12:00 Beijing) also starts the lunch off-peak window, so the
+  // first new-card minute is priced at the NEW off-peak rate.
+  for (const model of ["deepseek-v4-flash", "deepseek-v4-flash-vision-exp"]) {
+    assert.ok(Math.abs(input(model, at(10)) - 3.0) < 1e-9, `${model} 10:00 keeps the old peak card`);
+    assert.ok(Math.abs(input(model, atBeijing(2026, 9, 10, 11, 59)) - 3.0) < 1e-9, `${model} 11:59 keeps the old peak card`);
+    assert.ok(Math.abs(input(model, at(12)) - 1.0) < 1e-9, `${model} 12:00 is new card, off-peak window`);
+    assert.ok(Math.abs(input(model, at(13)) - 1.0) < 1e-9, `${model} 13:00 is new off-peak`);
+    assert.ok(Math.abs(input(model, at(14)) - 2.0) < 1e-9, `${model} 14:00 is new peak`);
+    assert.ok(Math.abs(input(model, at(15)) - 2.0) < 1e-9, `${model} 15:00 is new peak`);
+  }
+  // `deepseek-flash` only exists from the repricing onward: new card, no history.
+  assert.ok(Math.abs(input("deepseek-flash", at(10)) - 2.0) < 1e-9);
+  assert.ok(Math.abs(input("deepseek-flash", at(12)) - 1.0) < 1e-9);
+  assert.ok(Math.abs(input("deepseek-flash", at(15)) - 2.0) < 1e-9);
+});
+
+test("flash repricing: new card prices every bucket and survives the weekend rule", () => {
+  const base = { model: "deepseek-flash", turn: 1, step: 1, inputTokens: 0, cacheReadTokens: 0, outputTokens: 0, cacheWriteTokens: 0 };
+  const peak = atBeijing(2026, 9, 10, 15); // Thursday, new peak
+  const off = atBeijing(2026, 9, 10, 13); // Thursday, new off-peak
+  assert.ok(Math.abs(costOfStep({ ...base, time: peak, cacheReadTokens: 1e6 }) - 0.04) < 1e-9);
+  assert.ok(Math.abs(costOfStep({ ...base, time: peak, outputTokens: 1e6 }) - 8.0) < 1e-9);
+  assert.ok(Math.abs(costOfStep({ ...base, time: off, cacheReadTokens: 1e6 }) - 0.02) < 1e-9);
+  assert.ok(Math.abs(costOfStep({ ...base, time: off, outputTokens: 1e6 }) - 4.0) < 1e-9);
+  // Saturday after the cutoff is off-peak all day, at the NEW off-peak rates.
+  const saturday = atBeijing(2026, 9, 12, 15);
+  assert.equal(isPeak(saturday), false);
+  assert.ok(Math.abs(costOfStep({ ...base, time: saturday, inputTokens: 1e6 }) - 1.0) < 1e-9);
+});
+
+test("flash repricing: one session spanning the cutoff sums both cards", () => {
+  const sample = (time, turn) => ({
+    model: "deepseek-v4-flash", time, turn, step: 1, inputTokens: 1e6, cacheReadTokens: 0, outputTokens: 0, cacheWriteTokens: 0,
+  });
+  const before = sample(atBeijing(2026, 9, 10, 9), 1); // old peak 3.0 / 1M
+  const after = sample(atBeijing(2026, 9, 10, 13), 2); // new off-peak 1.0 / 1M
+  assert.ok(Math.abs(costOfStep(before) - 3.0) < 1e-9);
+  assert.ok(Math.abs(costOfStep(after) - 1.0) < 1e-9);
+  const session = costOfSession([before, after]);
+  assert.ok(Math.abs(session.cost - 4.0) < 1e-9);
+  assert.equal(session.priced, 2);
+  assert.equal(session.unpriced, 0);
+});
+
+test("effectiveRateEntry: history picks the newest generation, current card otherwise", () => {
+  const entry = builtinRates().models["deepseek-v4-flash"];
+  assert.equal(effectiveRateEntry(entry, atBeijing(2026, 9, 1, 10)).peak.input, 3.0);
+  assert.equal(effectiveRateEntry(entry, atBeijing(2026, 9, 10, 12)).peak.input, 2.0);
+  assert.equal(effectiveRateEntry(entry, undefined), undefined); // no time, no guess
+  const plain = { peak: { input: 1 }, offPeak: { input: 1 } };
+  assert.equal(effectiveRateEntry(plain, undefined), plain); // no history, untouched
+  assert.equal(effectiveRateEntry(undefined, 0), undefined);
+});
+
+test("flash repricing: a custom flat entry still overrides the built-in history", () => {
+  const rates = mergeRates(builtinRates(), { models: { "deepseek-v4-flash": { input: 0, cacheRead: 0, output: 0, note: "subscription" } } });
+  const sample = { model: "deepseek-v4-flash", time: atBeijing(2026, 9, 10, 15), turn: 1, step: 1, inputTokens: 1e6, cacheReadTokens: 0, outputTokens: 0, cacheWriteTokens: 0 };
+  assert.equal(costOfStep(sample, rates), 0);
+  assert.equal(costOfStep({ ...sample, time: atBeijing(2026, 8, 17, 10) }, rates), 0); // pre-cutover too
 });
 
 test("costOfStep: unknown model or missing time yields null, never a fabricated price", () => {
@@ -213,7 +285,7 @@ test("mergeRates: custom entries overlay built-ins per key; malformed override d
   const base = builtinRates();
   const override = mergeRates(base, { models: { "deepseek-v4-pro": { input: 1, output: 1 } } });
   assert.equal(override.models["deepseek-v4-pro"].input, 1); // flat replaces tiered
-  assert.equal(override.models["deepseek-v4-flash"].peak.input, 3.0); // untouched
+  assert.equal(override.models["deepseek-v4-flash"].peak.input, 2.0); // untouched (current flash card)
   assert.equal(mergeRates(base, null), base);
   assert.equal(mergeRates(base, "junk"), base);
   assert.equal(mergeRates(base, { models: "junk" }).models["deepseek-v4-pro"].peak.input, 9.0);

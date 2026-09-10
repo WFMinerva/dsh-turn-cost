@@ -2,6 +2,23 @@
 
 本文件按 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 维护，版本号遵循语义化版本。
 
+## [0.5.1] - 2026-09-10
+
+### Changed
+
+- **官方 Flash 家族重定价（2026-09-10 12:00 北京时间生效）**：内置 `OFFICIAL_CNY` 的 Flash 档改为新价——高峰 输入 ¥2.0 / 缓存读 ¥0.04 / 输出 ¥8.0，空闲 ¥1.0 / ¥0.02 / ¥4.0（每百万 token）；`deepseek-v4-pro` 价未变（高峰 9.0 / 0.3 / 27.0）。
+- **新增正名 `deepseek-flash`（DeepSeek-V4.1-Flash）**：官方以该 id 作为 V4.1 Flash 的规范模型名；两个退役 id（`deepseek-v4-flash`、`deepseek-v4-flash-vision-exp`）仍可调用，但由 V4.1 Flash 服务并按新 Flash 价计费——三个名字同步对齐新价。
+
+### Added
+
+- **内置价表按时间分档（`history`）**：条目可选带 `history: [{ before, peak, offPeak }]`，`before` 之前的样本按旧卡计价、之后按当前卡；新增 `effectiveRateEntry(entry, time)` 选档函数与 `FLASH_REPRICE_EFFECTIVE_MS` 常量。Flash 家族旧卡（2026-08-17：高峰 3.0 / 0.1 / 9.0）作为历史档保留，**历史会话金额不被新价重算**（沿用周末规则"保留历史规则"的既有原则）。
+- 用户 `rates.json` schema 不变（version 1）：`history` 是可选增字段；自定义平价/峰谷条目照旧生效，并优先于内置档。
+
+### Notes
+
+- 官方公告：`deepseek-v4-pro` 自 **2026-09-14 12:00 北京时间**起请求全部路由到 V4.1 Flash 并按 Flash 价计费。该切价**本轮未编码**（`lib/fold.js` 内已留注释），留待下一维护轮。
+- 验证：`node --test "test/*.test.mjs"` 70/70 PASS、`maintenance.ps1 verify` 6 项 PASS、四个 `lib\*.js` 通过 `node --check`，另做本机真实会话日志抽查（新旧价对照，见 `CURRENT_STATE.md`）。
+
 ## [0.5.0] - 2026-09-02
 
 ### Removed
