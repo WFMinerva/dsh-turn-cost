@@ -712,3 +712,43 @@ B 轻流程（改 bug）：门一已对齐范围（机主拍板：Qwen 走 bl+AK
 ### 推送边界
 
 未推送（本地提交 `f117164`）；推送仅凭机主明说「推送」。
+
+---
+
+## 变更记录 #15（2026-09-10，0.5.1：官方 Flash 家族重定价适配——价表按时间分档）
+
+### 触发与流程
+
+- **触发**：DeepSeek 官方 **2026-09-10 12:00 北京时间**调价——V4.1 Flash 发布，`deepseek-flash` 成为规范模型名；两个退役 id（`deepseek-v4-flash`、`deepseek-v4-flash-vision-exp`）仍可调用，但**由 V4.1 Flash 提供并按其价格计费**；`deepseek-v4-pro` 价未变，官方公告其请求自 **2026-09-14 12:00** 起全部路由到 V4.1 Flash 并按 Flash 价计费。
+- **流程**：判为高风险变更（跨机 + 公开项目影响面），走**三停**——门一范围（目标 / 预计写入 / 外部副作用 / 明确不碰，机主确认）→ 门二方案卡（七问 + 反建议；反建议「0 star、实质单用户项目为历史精度上机制是否值得」已摆出，机主拍 **B 档：时间分档**）→ 门三交付（**停在确认前**：未推送、未发版、未部署）。
+
+### 一手事实核实（2026-09-10）
+
+- 官方定价页实抓：flash 新价 高峰 输入 ¥2.0 / 缓存读 ¥0.04 / 输出 ¥8.0，空闲 ¥1.0 / ¥0.02 / ¥4.0（每百万 token）；高峰 = 周一至周五 9:00–12:00、14:00–18:00 北京时间，周末全天空闲；`deepseek-v4-pro` 高峰 9.0 / 0.3 / 27.0、空闲 4.5 / 0.15 / 13.5 **未变**。
+- 官方脚注：模型名请用 `deepseek-flash`；旧名仍可调用但对应模型已下线，请求由 DeepSeek-V4.1-Flash 服务并按 Flash 价计费。V4.1 Flash：1M 上下文、最大输出 384K、思考/非思考、支持图像理解。
+
+### 实施
+
+| 面 | 内容 |
+|---|---|
+| `lib/fold.js` | 新增 `deepseek-flash`（当前价，无历史档——该 id 自本次起才存在）；`deepseek-v4-flash` / `deepseek-v4-flash-vision-exp` 顶层改新价 + `history: [{ before: FLASH_REPRICE_EFFECTIVE_MS, ... 2026-08-17 旧卡 }]`；导出 `FLASH_REPRICE_EFFECTIVE_MS = Date.UTC(2026,8,10,4,0,0)`；新增 `effectiveRateEntry(entry, time)`（取 `time` 之前最新的一档，无 `time` 返回 undefined 不猜档）；`costOfStep` 接入选档；`deepseek-v4-pro` 价未动，注释标记 09-14 路由切价待办 |
+| `test/fold.test.mjs` | +5 组用例：三名字切点前/整/后、`deepseek-flash` 计价、周末×新卡、跨切点会话汇总、`effectiveRateEntry` 语义、用户平价覆盖仍优先；原 vision-exp 用例注明兼作历史档钉子；内置 flash 断言 3.0 → 2.0 |
+| 文档 | README 计费口径（时段/模型两行）、DEVELOPMENT（§计费不变式补 `history`、§三 更新流程补"保留历史规则"的具体做法与 pro 待办、§六 新增决策 #22、§七 补维护要点）、`rates.example.json`（新价 + `deepseek-flash` 示例 + 平价覆盖会丢历史档的提示）、CHANGELOG [0.5.1] |
+| 版本 | `package.json` 与 `package-lock.json` 0.5.0 → **0.5.1**（patch，沿用 0.1.2→0.1.3 加模型的先例；合同测试与 `versions-equality` 门禁要求两文件同步） |
+
+### 测试中间踩坑（如实记录）
+
+两处断言先写错、**代码本身正确**：① 把 `deepseek-flash` 也当成"切点前有旧卡"——它 2026-09-10 才成为规范名，不存在历史档；② 12:00 既是切点、又是午间空闲档起点，切点后第一分钟应按**新卡空闲价**（1.0/M）而非新卡高峰价（2.0/M）。两处都由 `node --test` 精确报错抓出。
+
+### 验证（单位机，2026-09-10）
+
+- `node --test` → **70/70 PASS / 0 FAIL**（0.5.0 为 65 项，本轮 +5）
+- `maintenance.ps1 verify` → **6/6 PASS / exit 0**（vendor-integrity / ps-syntax-bom / node-tests 70 / versions-equality / windows-fixture / privacy-scan）；首轮曾 FAIL 两项（bump 漏了 `package-lock.json`），已修
+- `node --check`：`lib/fold.js`、`lib/index.js`、`lib/client.js`、`lib/quota.js` 全过
+- **真日志抽查**（只读，本机 306 会话）：① 本会话（切点之后）新卡计价与手算吻合——turn1 `55655×2.0 + 253952×0.04 + 9047×8` 每百万 = **¥0.1938**；② 全量扫描 **296 个切点前会话 / 357.6 MB**，**53 个含 flash 样本**：分档表 ¥**99.6416** vs「只换数字」错做法 ¥**65.8701** → **避免历史失真 ¥33.77**；抽样一步 2026-08-26 11:27（高峰）`4319×3.0 + 8064×0.1 + 212×9.0` = **¥0.015671** ✅ 走的是旧卡
+
+### 门三状态与推送边界
+
+- 本地提交 **`5e7327e`**（代码 + 台账文档）；本记录与 `CURRENT_STATE.md` 刷新为随后一笔 docs 提交。
+- **未推送、未 npm publish、未部署**。推送仅凭机主明说「推送」；npm publish 会触发 2FA 网页认证，须机主在能点网页的终端执行；单位机部署需覆盖 profile 安装副本并重启 dsh web（**会中断当前会话**）。
+- 部署后待定项：单位机 `~/.dsh/turn-cost-rates.json` 里 2026-09-10 临时加的三条 flash 覆盖（内置表修好后冗余，处置由机主定）。
