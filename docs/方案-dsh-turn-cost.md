@@ -752,3 +752,44 @@ B 轻流程（改 bug）：门一已对齐范围（机主拍板：Qwen 走 bl+AK
 - 本地提交 **`5e7327e`**（代码 + 台账文档）；本记录与 `CURRENT_STATE.md` 刷新为随后一笔 docs 提交。
 - **未推送、未 npm publish、未部署**。推送仅凭机主明说「推送」；npm publish 会触发 2FA 网页认证，须机主在能点网页的终端执行；单位机部署需覆盖 profile 安装副本并重启 dsh web（**会中断当前会话**）。
 - 部署后待定项：单位机 `~/.dsh/turn-cost-rates.json` 里 2026-09-10 临时加的三条 flash 覆盖（内置表修好后冗余，处置由机主定）。
+
+## 变更记录 #16（2026-09-11，0.5.2：适配 DSH 会话格式 V3 的版本化日志文件名）
+
+### 触发与流程
+
+- **触发**：家中机 DSH 于 **2026-09-11 00:52** 由 `0.1.2-rc.1` 升级并重启到 **`0.1.5-rc.1`**；官方该版把会话数据格式升到 **V3**，日志文件名由 `session.jsonl.zstd` 改为 `session.v<N>.jsonl.zstd`。本插件把裸名硬编码在 `findSessionFile` / `listSessions` 两处 → **升级后新建会话的成本与 quota 本地计数全部失源**（枚举静默少列、按 id 查返回 undefined）。
+- **流程**：普通变更（机主一句话对齐范围后实施），**K3 复检由机主当场要求升级为全量**。范围：改代码 + 打包装进 `~/.dsh/profiles/web` + 重启宿主生效；不做与本缺口无关的重构、不改 `settings.yaml`、不推送。
+
+### 一手事实核实（2026-09-11，家中机）
+
+- 宿主版本与命名规则：npx 缓存 `@deepseek-ai/dsh` = `0.1.5-rc.1`（其余 `dsh-*` = `0.1.5-rc.2`）；命名规则实读 `dsh-session-format/lib/index.js`——`generation === 0 ? "session.jsonl" : "session.v${N}.jsonl"`，其 `CANONICAL_LOG_FILENAME` 正则与本次实现**逐字符一致**（K3 独立复核）。
+- 磁盘实况：新会话目录只有 `session.v3.jsonl.zstd`；**全库 0 个 `session.lock`**（Windows 走内核命名信号量、不落锁文件，故解析不依赖锁）。
+- **失源是两条原因叠加**：① 旧版硬编码旧名 → 找不到 v3 日志；② **0.4.2 内置价表也没有 `deepseek-flash` 条目**（而本机默认模型正是它），`~/.dsh/turn-cost-rates.json` 亦无 deepseek 行 → 即使找回日志也恒 0。两条均已在本版一并解决（后者靠合入云端 0.5.1 的 Flash 新价）。
+
+### 实施
+
+| 面 | 内容 |
+|---|---|
+| `lib/fold.js` | 新增并导出 `sessionLogBaseName(generation)`（命名规则的单一真源）与 `pickSessionLogName(sessionDir, suffix)`（目录扫描：认两代命名、**取最高版本**、每目录只出一条记录）；`findSessionFile` / `listSessions` 改用它；新格式代（v4…）由同一正则自动兼容 |
+| 前置 | 本地检出先快进到云端 `origin/master`（`7b1bab2` = 0.5.1，含 Flash 家族重定价与价表时间分档），再在其上加本次修复 |
+| `test/fold.test.mjs` | +3 项：命名两代映射（含 `undefined`/`-1`/`1.5`/`"3"` 边界）、混合目录偏好最高版本、v3-only 会话可见性 |
+| 版本与文档 | `package.json` + `package-lock.json` 0.5.1 → **0.5.2**；CHANGELOG [0.5.2]；README 会话路径写法与 npm 滞后说明；DEVELOPMENT「数据源/目录约定/命名两代」三处；`.gitignore` 加 `*.tgz` |
+
+### 验证（家中机，2026-09-11）
+
+- `node --test` → **73/73 PASS / 0 FAIL**（0.5.1 为 70 项，本轮 +3）；`maintenance.ps1 verify` → **6/6 PASS / exit 0**
+- **真机只读抽查**（重启后）：`listSessions` 枚举 **368 个会话（含 13 个 vN 版文件）**；v3-only 会话 `findSessionFile` 命中 `session.v3.jsonl.zstd`；本会话 **100% 可计价** `costOfSession = 0.859298 CNY`（`deepseek-flash`）；v0+v3 并存的迁移目录取 v3、未重复计数
+- **部署与生效**：`dsh-turn-cost-0.5.2.tgz` 装进 `~/.dsh/profiles/web`（`file:` 依赖改指该 tgz，装前备份 profile manifest），宿主重启后生效（PID 24280，`0.1.5-rc.1`）
+
+### K3 双层复检（2026-09-11，机主要求全量）
+
+- **机器验**：tool-library `checks.py` C1–C6/C8/C9 PASS、C7 WARN、C-bat/C-js 两项 FAIL 经核为**既有问题**（与本轮 diff 无关）；本仓 73/73 与 verify 6/6 由审阅方独立复跑。
+- **独立模型审**：结论 **「通过」**，无阻断项；审阅对象为本仓 `546fc59`（+`5a506c2`）与 tool-library `ca48984`。**路由如实记录**：本串为 standard preset、无 `subagent_codex` 工具，按 `docs/开发流程.md` **未裸调 `codex exec` 回退**，改用 DSH 隔离 subagent 后端 + `kimi-coding/k3` 路由；未走「Codex 独立审」预设。
+- 审阅方关键证据：命名正则与宿主源码逐字符一致；**部署件 `lib/fold.js` 与仓内 SHA256 相同**（`8206E4A1…`）；授权边界 A–E 逐项吻合（`settings.yaml` mtime 早于本轮窗口、未被触碰）；提交作者沿用仓库既有 noreply 身份。
+- 3 条不阻断观察：① `sessionLogBaseName` 是**对外公共 helper**（生产路径走目录扫描 + 正则），与扫描正则构成同一映射的两处表达 → **本版不就地合并**（已批准且已部署的产物不就地改），留待下次升版；② 会话日志若为符号链接会被 `Dirent.isFile()` 静默跳过（本机无此形态）；③ 仓外 `work/AI成本基线/ledger_dsh.mjs` 有同源硬编码缺口（不在本仓范围）。
+
+### 门三状态与推送边界
+
+- 本地提交 **`546fc59`**（代码 + 版本 + 文档）；随后 `5a506c2`（CURRENT_STATE 刷新）、`e9b91b0`（本记录与 K3 结论留档）。
+- **已推送**（2026-09-11 机主明说「推送」，`7b1bab2..e9b91b0` → origin/master），CI run **#22 双 job 全绿**；**npm 未发布**（仍是 0.1.3，需机主 2FA）。
+- 待办：单位机部署 0.5.x（仍 0.4.2）；`deepseek-v4-pro` 于 2026-09-14 12:00 路由到 V4.1 Flash 的切价需再走一轮维护。
