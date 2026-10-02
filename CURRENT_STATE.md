@@ -5,7 +5,7 @@
 > **状态口径**：只写「已用命令/工具核到的事实」，并标明核对的时点与机器。凡未经核实一律写进「未验证项」，不写成完成；**「装得上」「dump-config 正常」「HTTP 200」「界面有渲染」都不算「跑起来了」**。
 
 - **当前分支**：master
-- **HEAD**：`1b81104`（`docs(readme): 加界面截图（会话累计 + 每轮费用），并把 assets 纳入 npm 包`；已推送，`origin/master` 同步）。同一轮的链路：`e13fe3d`（0.6.2 修复）→ `5cde0d1`（发布记录）→ `1b81104`（截图）；`29b38d8`／`839db31` 属 0.6.1 轮。
+- **HEAD**：**最后一次实质提交**是 `1b81104`（`docs(readme): 加界面截图（会话累计 + 每轮费用），并把 assets 纳入 npm 包`）。同一轮链路：`e13fe3d`（0.6.2 修复）→ `5cde0d1`（0.6.2 发布记录）→ `1b81104`（截图）→ **本文档的记录提交**（它只能记录自己之前的提交，写不进自身哈希，所以**永远比上面这条再领先一格**；查实际 HEAD 一律以 `git log` 为准）。`29b38d8`／`839db31` 属 0.6.1 轮。
 - **工作树**：干净（无未提交改动；`node_modules/`、`*.tgz`、`.tmp-*` 按 `.gitignore` 排除）
 - **发布状态**：**npm `dsh-turn-cost@0.6.2` 已发布**，`dist-tags.latest = 0.6.2`；**0.6.1 未被改写**（仍在 registry 上、让位给 0.6.2）。
 - **对外动作**：已向精选列表 `awesome-dsh-plugin/awesome-dsh-plugin` 提条目 PR **[#6441](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin/pull/6441)**（CI pass、MERGEABLE，待维护者合并）；GitHub 仓库描述已更新；截图已发布到本仓库（见 §十）。
