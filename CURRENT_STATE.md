@@ -1,24 +1,134 @@
 # CURRENT_STATE.md — dsh-turn-cost 实时状态
 
-> 本文件是本仓库实时状态的唯一权威（里程碑快照在 tool-library `projects/README.md`，仅为静态快照）。跨机/跨会话交接：先读本文件，再按 `AGENTS.md` 开工顺序执行。
+> 本文件是本仓库实时状态的唯一权威。跨机/跨会话交接：先读本文件，再按 `AGENTS.md` 开工顺序执行。
+>
+> **状态口径**：只写「已用命令/工具核到的事实」，并标明核对的时点与机器。凡未经核实一律写进「未验证项」，不写成完成；**「装得上」「dump-config 正常」「HTTP 200」「界面有渲染」都不算「跑起来了」**。
 
 - **当前分支**：master
-- **state_based_on_commit**：`546fc59`（0.5.2 适配 DSH 会话格式 V3 的版本化日志文件名；**未推送**）
-- **dirty**：无（工作区干净）
-- **最近完成**：
-  - **0.5.2 + K3 双层复检通过（2026-09-11，家用机）**——机主要求把本轮普通变更升级为全量复检：机器验（`node --test` 73/73、`maintenance.ps1 verify` 6/6、tool-library `checks.py` C1–C6/C8/C9 PASS、C7 WARN、C-bat/C-js 两项 FAIL 经核为既有问题）＋独立模型审（DSH 隔离 subagent 后端 + `kimi-coding/k3` 路由；本串为 standard preset、无 `subagent_codex`，按 `docs/开发流程.md` 未裸调 `codex exec`）→ 结论 **「通过」**，无阻断项；审阅方另给 3 条不阻断观察（`sessionLogBaseName` 为对外 helper 而非内部调用、符号链接日志理论行为差异、仓外 `ledger_dsh.mjs` 同源缺口）。K3 两层结果留档于 tool-library `docs/调研-DSH-0.1.5升级影响面-2026-09-10.md` 追加记录第 3 轮。
-  - **0.5.2 会话格式 V3 文件名适配（2026-09-11，家用机）**——本机 DSH 于当日 00:52 由 `0.1.2-rc.1` 升级到 `0.1.5-rc.1`，会话数据格式升至 **v3**，日志名由 `session.jsonl.zstd` 变为 `session.v<N>.jsonl.zstd`；本插件把裸名硬编码在 `findSessionFile` / `listSessions` 两处 → **升级后新建会话的成本与 quota 本地计数全部失源**（枚举静默少列、按 id 查返回 undefined）。修法：新增并导出 `sessionLogBaseName(generation)` 与 `pickSessionLogName(sessionDir, suffix)`（读目录、认两代命名、**取最高版本**；一个会话目录仍只产出一条记录，迁移会话 v0 原件 + v3 新件并存时取 v3，不重复计数；未来 v4 由同一正则兼容），两处调用点改用它。流程=普通变更（机主一句话对齐范围；同步做了代码修复 + 打包部署 + 宿主重启），详见 `CHANGELOG.md` [0.5.2]。
-  - **0.5.1 官方 Flash 重定价适配（2026-09-10，单位机）**——官方 2026-09-10 12:00 北京时间调价：V4.1 Flash 发布、`deepseek-flash` 成规范名，两个退役 id 由 V4.1 Flash 兜底服务并按新 Flash 价计费。内置 `OFFICIAL_CNY` 改新价（高峰 2.0 / 0.04 / 8.0，空闲 1.0 / 0.02 / 4.0 元每百万 token），新增 per-model `history` 历史档 + `effectiveRateEntry()` 选档 → **切点前的历史样本仍按 2026-08-17 旧卡计价，不被新价重算**；`deepseek-v4-pro` 价未动并标注官方 09-14 12:00 路由切价待办。流程=高风险变更三停（门一范围 / 门二方案 B 档「时间分档」/ 门三交付），详见 `docs/方案-dsh-turn-cost.md` 变更记录 #15。
-  - **0.5.0 已开发、部署、门三确认并推送（2026-09-02，单位机）**——见 `CHANGELOG.md` [0.5.0] 与变更记录 #14。
-- **下一步唯一动作**：**推送 0.5.2**（`546fc59` + `5a506c2` → origin/master；推送仅凭机主明说「推送」；K3 双层复检已通过，推前无待办）→ 之后按需 `npm publish`（触发 2FA 网页认证，须机主在能点网页的终端跑）与单位机部署（`npm pack` 后覆盖 `~/.dsh/profiles/web/node_modules/dsh-turn-cost` 的 `lib/`+`package.json`，**保留** profile `cordis.patch.yml` 里的 `ratesPath` 覆盖，随后重启 dsh web）。另：官方 `deepseek-v4-pro` 于 2026-09-14 12:00 路由到 V4.1 Flash 的切价需再走一轮维护；`sessionLogBaseName` 与扫描正则的双份真相留待下次升版合并。
-- **阻塞**：无
-- **验证命令与结果**（提交态入口，不依赖 package.json scripts）：
-  - `node --test` → **73/73 PASS / 0 FAIL**（exit 0；0.5.1 为 70 项，本轮 +3 组命名两代/混合目录/v3-only 用例）——2026-09-11 家用机实际运行
-  - `.\maintenance.ps1 verify` → **6/6 PASS**（vendor-integrity / ps-syntax-bom / node-tests 73 / versions-equality / windows-fixture / privacy-scan），退出码 0——2026-09-11 家用机实际运行
-  - `node --check`：`lib/fold.js`、`lib/index.js`、`lib/client.js` 全过
-  - **真日志抽查**（只读，本机 367 会话 / 12 个 vN 版文件）：① 重启后新建会话（v3-only）`findSessionFile` 命中 `session.v3.jsonl.zstd`；② 当前会话 100 个样本**全部可计价**，`costOfSession = 0.859298 CNY`（`deepseek-flash`，0.5.1 内置新价在部署后生效）；③ v0+v3 并存的迁移目录取到 v3，未重复计数
-  - **部署与生效**：`dsh-turn-cost-0.5.2.tgz` 已部署进 `~/.dsh/profiles/web`（`file:` 依赖改指该 tgz），宿主已重启（PID 24280，`0.1.5-rc.1`，2026-09-11 01:11:31 起），重启后新会话可读可计价
-- **已验证机器**：家用机（0.5.2 修复 / 门禁 / 真日志抽查 / 部署 / 宿主重启生效 / K3 双层复检，2026-09-11）；单位机（0.5.1 开发 / 门禁 / 真日志抽查，2026-09-10）；家用机（0.4.2 门三）；单位机（0.5.0 开发 / 门禁 / 部署 / 四条链路实测 / 机主目检 + CI 修复，2026-09-02）
-- **本机专属依赖**：node v24.18.0 / npm 11.16.0（家用机）；单位机 node 同源可跑门禁；dsh 宿主（单位机由 PowerShell 循环自动拉起、3080 常驻 → 升级只能走手动部署，见 tool-library `machines/单位机.md` 与方案 #14）；Kimi loopback 服务 / `bl` CLI 仅为额度功能的可选依赖
-- **不可同步数据**：`node_modules/`；个人费率表（若有）；`evidence/` 实机验收原始报告（脱敏后也不入库）
-- **推送状态**：0.5.2 提交 `546fc59` + `5a506c2` + `e9b91b0` **已推送**（2026-09-11，机主明说「推送」；`7b1bab2..e9b91b0`），GitHub Actions Test workflow run **#22 双 job 全绿**（`npm ci + host/config + tests` 13s success；`Windows unified maintenance verify` 42s success，与本地同一入口）。**npm 未发布**（npm 上仍是 0.1.3）。**交接提示**：家用机的「启动 DSH（含额度）」启动器 `state.json` 已由 `isolated-pnpm` 固定副本（0.1.1-rc.2）改为指向 npx 缓存（`kind: npx-cache`，node + `_npx\...\dsh\lib\bin.js`），故该路径今后随 npx 缓存版本走；单位机未做此改动。
+- **HEAD**：`4a191f7`（与 `origin/master` 同步：`git rev-list --left-right --count origin/master...master` = `0  0`）
+- **dirty**：0.6.0（官方接入改造）+ **0.6.1（修掉「金额恒为 `?`」）均未提交**；npm 未发布（仍是 0.1.3）；未 push。
+- **版本**：仓库为 **0.6.1**。0.6.0 从未提交、从未发布，其 tarball 已被 0.6.1 取代。
+
+## 一、本轮（0.6.1）修了什么 —— 机主报「界面显示 `? · 本会话 15041万 token · 缓存读 100%`」
+
+### 真因：`foldFor` 自己读内存会话的事件，而那个字段不存在
+
+- `Session` 把事件放在**私有 `log`**，对外只有官方访问器 **`snapshotEvents()`**；**`Session` 没有 `events` 属性**（0.2.0-rc.2 源码：`packages/session/session` 的 `class Session { log = []; get seq() {...} snapshotEvents(...) {...} }`）。
+- 0.6.0 的解析顺序把「live 内存日志」放第一优先并读 `live.events` → 恒为 `undefined` → 折叠出空样本 → `costOfSession([])` 返回 `null`。**后果：只要该会话被 UI 打开（正在使用时必然如此），`turnCost/query` 与 `turnCost/sessionTotals` 一律返回 `null`**；而没被打开的会话走官方读取反而正常——这就是「金额时而能算、正在用的会话算不出」的不对称。
+- **客户端随后把失败吞掉并回退官方 `tokenUsage` 投影**，于是读数条渲染成一行看起来正常的 token 统计（`? · 本会话 … token · 缓存读 …%`），金额恒为 `?`。**显示统计条 ≠ 费用查询成功**，这正是机主指出的问题。
+- 同一轮实测还发现**每轮徽章根本不渲染**：它在前端扫 `snapshot.chat.nodes` 猜 `node.location.turn.turn`，形状是猜的，实测恒为 `null`。
+
+### 修法（官方能力优先，删掉自建路径）
+
+| 改动 | 内容 |
+|---|---|
+| 取数唯一化 | 完整日志**只**来自官方 `ctx.sessionQuery.readSession()`（官方即 live 优先：内存会话由 `snapshotLive()` → `snapshotEvents()` 给出，历史会话由持久层给出，都是脱离副本 + 重放校验）。自建 live 路径删除。 |
+| 缓存 | 只用于省读取、不作数据来源：① `ctx.sessions.get(id).seq`（官方契约 `seq === log.length`，零 I/O）相同则复用折叠；② 读回日志的 `sessionLogSignature`（事件数 + 最大 `seq`）相同则复用折叠，不再重算 447 步。删除自造的 `logMovedPast`。 |
+| 兜底 | 仅当没有 `sessionQuery` 后端或官方读取抛错时扫日志；其 live 合并改用 `snapshotEvents()`。 |
+| 每轮读数 | 徽章不再自己推导轮号：把槽位属主给的 `messageId` 交给宿主，宿主用 `messageTurnsOf` 在事件日志里映射到 `turn`；`turnCost/query` 同时接受 `{ turn }` / `{ messageId }`。 |
+| 失败可见 | `rpc()` 返回 `{ ok, value }` / `{ ok:false, code, message }` 并 `console.warn` 出网关错误码；读数条区分「有数字 / 查询失败 / 未计费 / 查询中」四种文案，**失败时不再借用官方 token 数伪装成正常读数**；会话切换立即查询，不受 1.2 s 防抖拖累；缓存读比例不再把 99.65% 四舍五入成 `100%`。 |
+| 测试 | `test/session-source.test.mjs` 换成**官方形状夹具**（私有 `log` + `snapshotEvents()`，并断言 `"events" in session === false`）——旧夹具用 `events` 数组正是缺陷逃过测试的原因；新增 `{messageId}` 定位、空 live 会话、签名/`messageTurns` 形状等（11 项）。`test/client-quota.test.mjs` 新增四个诚实性用例。 |
+
+## 二、验证证据（0.6.1，2026-10-03 家用机）
+
+### 1）本地门禁
+
+```
+npm test            → 86/86 PASS / 0 FAIL
+npm run check       → 5 个 lib/*.js 语法全过
+node tools/peer-compat.mjs --runtime 0.2.0-rc.2 → exit 0
+git diff --check    → 干净
+```
+
+### 2）隔离宿主 + 真实会话 + 无头浏览器（第 4 层，0.6.1 起新增的验证手段）
+
+命令（不碰正在用的 desktop profile）：
+
+```powershell
+$env:DSH_HOME='C:\Temp\dsh-tc-iso'
+dsh iso --from-default-profile web --dump-config      # 官方模板建隔离 profile
+dsh plugin --profile iso add F:\Workspaces\dsh-turn-cost
+# 复制真实数据（复制而非 junction：宿主可能迁移日志）
+copy .dsh\storages            → $DSH_HOME\storages
+copy .dsh\sessions\<工作区>\<sessionId> → $DSH_HOME\sessions\<工作区>\
+dsh --profile iso --no-open --port 19401              # 打印带 token 的本地 URL
+chrome --headless=new --remote-debugging-port=9333 --user-data-dir=<临时目录>
+# CDP：Network 抓 POST /api/turnCost/* 的请求体与响应体；Runtime.evaluate 读 DOM 与 React fiber props
+```
+
+结果（同一真实会话 `session-4a4f6dfb-7f18-4852-a4f4-56fcbde3bf8e`，「维护 dsh-turn-cost 插件并核对状态」）：
+
+| 项 | 修前 | 修后（原始 RPC 返回 / 界面文本） |
+|---|---|---|
+| 读数条 | `? · 本会话 16479万 token · 缓存读 100%` | `deepseek-flash · 本会话 ¥4.97 · 16479万 token · 缓存读 99.6%` |
+| 每轮徽章 | **一个都不渲染** | `本轮 ¥1.80 · 6827万 token · 缓存读 99.9%`、`本轮 ¥0.65 · 1438万 token · 缓存读 99%`（列表虚拟化，只挂载可见消息） |
+| 官方统计条 | `3 轮 447 步·291 tok/s / 165M tok·缓存命中 99.6%` | 同上（作为对照） |
+
+**算术核对（逐项相等，不是「看着差不多」）**：
+
+- 分桶：`input 346717+78650+153389 = 578756`、`output 135231+90732+52345 = 278308`、`cacheRead 81656064+68101504+14177152 = 163934720`，合计 `164791784` = 读数条的「16479万 token」。
+- 费用：`¥2.5207622799999996 + ¥1.803608080000001 + ¥0.6463120400000002 = ¥4.9706824` = 会话汇总 `¥4.9706823999999985`。
+- 模型名读自会话日志（`deepseek-flash`，provider `deepseek-account`），不是当前预设的猜测。
+- 每轮 `{messageId}` 定位（`turnCost/query`）与 `{turn}` 定位返回同一轮同一数字。
+- 有 `usage` 的 438 个 `assistant/message` 事件 → 447 个 `(turn, step)` 样本（同一步的流式 chunk 样本被最终 message 覆盖），`priced: 447 / unpriced: 0`。
+
+### 3）仍然是「官方路径 + 官方 Inspect」的三层验证（0.6.0 已核，本轮未变）
+
+组合（`--dump-config` 出现 `- id: turn-cost / name: dsh-turn-cost`，无 `skipping`）／host 挂载（`Config.listConfigs` → `include:turn-cost`、`status: "schema"`、`packageDir` 指向该 profile 的 `node_modules\dsh-turn-cost`、投影出插件自己的 Config schema）／client 注册（`Slots.listSubTree {"root":"conversation.chat.assistant-actions"}` 的 `occupants` 含 `{id:"turn-cost", active:true}`）。
+
+> 0.6.1 的教训：这三层全绿时金额仍可以是 `?`。它们只证明「挂上了、注册了」，**不证明取到了数**。
+
+### 4）机主目检（2026-10-03，桌面端重启后）
+
+机主重启桌面端后确认：**当前会话显示约 ¥5.98 的费用**。这是 0.6.1 唯一的「人眼看」证据，补上了 §二.2 只能由脚本读取的那一层——**金额渲染确实回来了**。
+
+两点写清楚，免得被当成账单或精确对账：
+
+- 这是**估算费用**：`provider 上报 token 数 × 本地费率表单价`，不构成账单；订阅制路由按 0 价登记只显示 token。
+- ¥5.98 与 §二.2 隔离宿主的 ¥4.97 是**同一条会话在不同时刻**的读数（核对期间会话仍在增长，多出约两轮），二者**不构成互校**，只共同证明「金额出现了、量级一致」。逐轮与分桶的严格对账以 §二.2 的算术为准。
+
+## 三、三个必须分清的事实（不要合并成一句话）
+
+1. **桌面 profile 现在装有本插件**（机主本轮自行安装并保持安装：`link:F:/Workspaces/dsh-turn-cost`，在 `dsh.profile.bundles` 里）。**该 profile 在 0.6.0 轮之前从未装过本插件**；上一轮我临时装过、验证后卸载还原。
+2. **旧 Web profile 装了但被拒载**：`~/.dsh/profiles/web/node_modules/dsh-turn-cost`（0.5.2）在 dsh 0.2.0-rc.2 下被 `incompatible-version` 拒载（原文 `skipping profile bundle "dsh-turn-cost"`）。该 profile 当前没有在跑。
+3. **隔离宿主曾「挂载失败」是我 harness 的缺陷，不是插件缺陷**：当时用空 profile + `--patch` 绝对路径（官方文档里的**仓库内教程式**回路）且缺应用层。**本轮已用官方 `--from-default-profile web` 建出可用隔离宿主并端到端跑通**（见 §二.2），该问题彻底关闭。
+
+## 四、桌面 profile 的自定义费率表：需要关联，但**我没有改**
+
+- 事实：桌面 profile 的 `include:turn-cost` 条目**没有 config**，所以 `ratesPath` 未设 → `~/.dsh/turn-cost-rates.json`（机主自己维护的那张表，含订阅路由 0 价与 `quota` 块）**被静默忽略**。
+- 影响面有限（实测）：内置官方 CNY 卡覆盖 DeepSeek 按量路由（本轮 ¥4.97 就是在**没有**该文件的情况下算出来的），内置额度路由也与文件里的 `quota` 块等价（`builtinQuotaRoutes()` 已含 `kimi-coding` / `qwen-token-plan-cn`）。**配它的意义是让那张表真的生效**，而不是让金额算出来。
+- 官方配置入口（一行，用户补丁层，与其它插件配置同处）：
+
+  ```yaml
+  # ~/.dsh/profiles/desktop/cordis.patch.yml
+  - id: turn-cost
+    name: dsh-turn-cost
+    config:
+      ratesPath: %USERPROFILE%\.dsh\turn-cost-rates.json
+  ```
+
+- **未执行**：按 `AGENTS.md` 红线 3（未经机主同意不改动正在使用的 profile），我只做了核对并给出可直接粘贴的一行，等机主决定。改完需重启宿主才生效。
+
+## 五、未验证项 / 边界（不要当成已完成）
+
+- ~~桌面宿主需要重启~~：**机主已重启并目检通过**（见 §二.4）。
+- ~~界面观感未目检~~：**已由机主目检**（桌面端当前会话显示约 ¥5.98，估算费用）。
+- **Kimi / 阿里两条订阅额度读数仍未实测**（口径未变）：隔离宿主里两条路由都返回 `ok:false`（该环境没有 loopback OAuth 服务、没有 `bl` CLI）；插件侧只有「路由配置 → 端点归一化」的单测覆盖（`normalizeKimiLocalUsage` / `normalizeAliyunBl`），**没有端到端实机读数**，因此**不声称额度读数可用**。
+- **`github:` 形式的「添加插件」仍未实机跑**：npm 形式在 0.6.1 发布后由隔离环境实测（见 §八）；Git 形式只满足包结构要求，未实测。- 桌面 profile 的 `ratesPath` 仍未关联（§四），改完需重启宿主。
+
+## 六、环境事实（2026-10-03 家用机）
+
+- 正在使用的宿主是**桌面应用**：内嵌运行时 `@deepseek-ai/dsh-desktop-runtime@0.2.0-rc.2`，GUI `127.0.0.1:19387`，profile = `desktop`；插件以 `link:F:/Workspaces/dsh-turn-cost` 安装（**保持不动**，未被 npm 版本覆盖）。
+- dsh CLI 不在 PATH；桌面应用自带入口 `...\resources\runtime\cli\bin\dsh.cmd`。`dsh --version` = **0.2.0-rc.2**（Node 24.21.0 / pnpm 11.7.0）。
+- 会话根 `~/.dsh/sessions`：**885** 个会话目录（v0 353 / v3 313 / v4 219），全部可解析。
+- 隔离宿主 harness：`$DSH_HOME` 指向临时目录，用官方 `--from-default-profile web` 建 profile；CDP 驱动脚本在 `%TEMP%\dsh-tc-inspect`（验证结束后临时数据已删）。
+- **不可同步数据**：`node_modules/`；个人费率表（`~/.dsh/turn-cost-rates.json`，不在仓库内）；本机 `.tmp-*` 草稿。
+
+## 七、已验证机器
+
+家用机（0.6.1 真因定位 + 隔离宿主端到端 + 无头浏览器逐轮核对 + 机主目检，2026-10-03）；家用机（0.6.0 官方接入改造 / 官方路径三层验证 / 80 项测试，2026-10-03）；家用机（0.5.3 / 0.5.2 / K3 双层复检，2026-09）；单位机（0.5.1，2026-09-10）；单位机（0.5.0，2026-09-02）
+
+## 八、0.6.1 发布记录
+
+- 本轮经机主明确授权执行：**提交 → 推送 → 等 CI 通过 → 发布 npm 0.6.1 → 隔离环境验证已发布包**。桌面 profile 的 `link:` 安装**保持不动**，不被 npm 版本替换。
+- 发布前的路径核对、敏感数据排除与门禁结果，以及提交号、CI 结论、registry 版本/dist-tag、已发布包在隔离宿主上的「安装 + 费用查询」实测结果，见本节发布后追加的记录（或本轮对话报告）。

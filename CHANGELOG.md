@@ -2,6 +2,112 @@
 
 本文件按 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 维护，版本号遵循语义化版本。
 
+## [0.6.1] - 2026-10-03
+
+**主题：修掉「界面只显示 token、金额恒为 `?`」的真因——它不在费率表，而在会话日志的读取方式。**
+
+### Fixed
+
+- **`foldFor` 的自建 live 路径读的是不存在的字段，导致所有已打开会话的费用恒为空**（真因，实测定位）：
+  - `Session` 的事件存在**私有 `log`** 里，对外只有官方访问器 **`snapshotEvents()`**；`Session` **没有 `events` 属性**（见 `packages/session/session` 的 `class Session`：`log = []`、`get seq() { return SessionLogOffset(this.log.length) }`、`snapshotEvents(fromSeq, toSeqExclusive)`）。
+  - 0.6.0 的解析顺序把「live 内存日志」放在第一位并读取 `live.events` → 恒为 `undefined` → 按空日志折叠 → `costOfSession([])` 返回 `null`。于是**只要该会话被 UI 打开（正在使用时必然如此）**，`turnCost/query` 与 `turnCost/sessionTotals` 都返回 `null`；未被打开的会话走官方读取反而正常——这就是「历史会话能算、正在用的会话算不出」的不对称。
+  - **不再自建 live 路径**：完整日志一律取自官方 `ctx.sessionQuery.readSession(sessionId)`（官方口径即 **live 优先**：内存中的会话由 `snapshotLive()` → `session.snapshotEvents()` 给出，历史会话由持久层给出，两者都是脱离副本 + 重放校验）。只有**没有** `sessionQuery` 后端、或官方读取抛错时才回退自扫日志；该兜底的 live 合并同样改用 `snapshotEvents()`。
+  - 缓存改为**只用来省掉重复读取，绝不作为数据来源**：`ctx.sessions.get(id).seq`（官方契约 `seq === log.length`，零 I/O）未变则复用缓存折叠；读回的日志 `sessionLogSignature`（事件数 + 最大 `seq`）相同则复用上一个折叠，而不是重新计价 447 步。删除了原先自造的 `logMovedPast` 签名解析。
+
+- **每轮徽章此前根本不渲染**（同轮实测发现）：它用 `useSession` 在浏览器里遍历 `snapshot.chat.nodes` 反推「这条消息属于第几轮」，字段形状是猜的，实测恒为 `null`。现在把槽位属主给的 **`messageId`** 直接交给宿主，由宿主在自己的事件日志里把消息 id 映射到 `turn`（`messageTurnsOf`）——浏览器不再重复推导对话树。`turnCost/query` 因此同时接受 `{ turn }` 与 `{ messageId }`。
+
+- **客户端不再吞掉查询失败**（机主指出的问题：显示统计条不代表费用查询成功）：
+  - `rpc()` 不再把一切失败折叠成 `null`，而是返回 `{ ok:false, code, message }` 并 `console.warn` 出网关的**稳定错误码**；成功返回 `{ ok:true, value }`。
+  - 读数条区分四种状态并各自说明：宿主给出数字（`模型名 · 本会话 ¥X · …`）／**查询失败**（`费用查询失败 · …`，悬停标题含错误码）／宿主答「该会话没有可计费用量」（`未计费 · …`）／仍在查询（`查询中 · …`）。此前失败时会**借用官方统计条的 token 数**渲染成一行看似正常的读数，这正是「看起来在工作、其实没算」的来源。
+  - 会话切换立即查询（不再等 1.2 s 防抖），避免流式输出期间投影持续变化把首次查询无限推迟。
+  - 缓存读比例不再把真实的未命中四舍五入成整 `100%`（99.65% 现在显示 `99.6%`，与官方统计条一致）。
+
+### Added
+
+- `test/session-source.test.mjs` 的**回归用例与官方形状夹具**：假会话现在只暴露官方访问器（私有 `log` + `snapshotEvents()` + `seq`），并显式断言 `"events" in session === false`——直接用 `events` 数组的旧夹具正是这个缺陷逃过测试的原因。新增 `{ messageId }` 定位、空 live 会话不编数、折叠签名与 `messageTurns` 形状等用例（共 11 项）。
+- `test/client-quota.test.mjs` 新增四个诚实性用例：失败时徽章**什么都不渲染**、成功时渲染金额行、读数条**绝不把官方 token 当作自己的金额**（失败／未计费／查询中三种文案各自带错误码或说明）。
+
+### Notes
+
+- 0.6.0 从未提交、从未发布，其 tarball 已被本版取代；0.6.0 changelog 里「live 内存日志最权威」的说法**是错的**，本版更正。
+- 实测证据（同一真实会话 `session-4a4f6dfb-…`，447 步）：三档 token 分桶逐项相加恰等于会话汇总（`578756 + 278308 + 163934720 = 164791784`，即读数条的「16479万 token」），三轮费用 `¥2.5208 + ¥1.8036 + ¥0.6463 = ¥4.9707` 恰等于会话汇总；模型名读自日志（`deepseek-flash`，provider `deepseek-account`）。徽章与读数条显示值与原始 RPC 返回逐项一致。
+
+## [0.6.0] - 2026-10-03
+
+**主题：把项目整理成能通过官方「添加插件」直接接入的标准插件，删掉官方已负责的一切重复实现。**
+
+### Changed
+
+- **接入方式唯一化**：只认官方机制——`dsh plugin --profile <name> add <npm 包名 | github:owner/repo | 本地目录 | tarball>`，或应用内侧边栏「插件」页的**添加插件**。官方会自己完成安装、依赖解析、把包名追加进 `dsh.profile.bundles`、profile 补丁分层，以及卸载时的注册清理；**不再手写 profile 清单，也不再重建安装器**。
+- **peer 模型改为官方推荐形态，彻底消除兼容性判定面**：宿主提供的包（`@deepseek-ai/cordis`、`dsh-home-paths`、`dsh-typert-protocol`）在 `peerDependencies` 里声明为 **`"*"`**。`"*"` 对任何版本都成立，所以 **dsh 的兼容性门禁不可能再因版本区间拒载本插件**——0.5.2 的 `^0.1.0-rc.6` 正是被 0.2.0-rc.2 整包拒载的原因，而 0.5.3 用的「猜一个够宽的上界」只是把同一个陷阱推迟。被复核过的**精确**版本改由 `devDependencies` 记录（`cordis@4.0.4`、`dsh-home-paths@0.2.0-rc.2`、`dsh-typert-protocol@0.2.0-rc.2`，与桌面运行时逐项一致），本地测试因此直接跑在真实宿主版本上。此形态与本机官方可安装参考件 `dsh-notion` 一致。
+- **`tools/peer-compat.mjs` 重写**：不再自造「支持的版本窗口」，改为守住 peer 模型（`"*"` peer + 精确 dev pin + pin 必须等于已复核版本），范围数学**全部交给标准 `semver` 包**并使用官方同款 `{ includePrerelease: true }`。上一版自实现的 semver 在「`^` 基数本身是预发布」与「上界与预发布比较」两处与标准库不一致。
+- **`lib/index.d.ts` 新增（手写声明）+ `types` 字段**：实现是纯 JS，故声明手工维护；包因此具备与官方可安装插件一致的入口/类型契约（`main: lib/index.js`、`exports["./client"]`、`types`）。
+- **`package.json` 对齐可安装 bundle 形态**：补 `engines`（`^22.19.0 || >=24.0.0`）、`packageManager`、关键词 `dsh-plugin`；`files` 增补 `README.md`；scripts 收敛为 `test` / `check`。
+- **README / AGENTS.md / docs/DEVELOPMENT.md 重写**：清除全部失效指令（一键包、`maintenance.ps1 verify/acceptance`、固定 3080、`profiles/web` 假设、安装器验收表），改为官方接入方式 + 官方三层验证表（组合 / host 挂载 / client 注册）。
+- **CI 简化**：删除 `windows-installer` job（它跑的是已删除的 `maintenance.ps1 verify`），只保留 `npm ci` + `npm test` + `npm run check` + peer 模型检查。
+
+### Removed
+
+- `installer/`（15 文件：一键安装/启动/回滚/卸载 + 固定 CLI lockfile）、`scripts/build-windows-installer.ps1`
+- `versions.json` 与派生的 `installer/dsh-package*.json` / `tools-package*.json`——**固定宿主版本**这一做法本身被废弃
+- `maintenance.ps1`、`maintenance/`、`vendor/maintenance/`（+ `vendor/manifest.json`）
+- `test/windows-installer.test.ps1`、`test/installer-contract.test.mjs`
+- `evidence/example-report.json`（`acceptance` 链已删除）
+- 仓库根的 `peerDependencies` 精确区间模型与 0.5.3 的 `REVIEWED_MINOR_LINES` 机制
+
+> 删除理由与「读旧文档时该忽略什么」见 [`docs/迁移说明-0.6.0接入方式.md`](./docs/迁移说明-0.6.0接入方式.md)。`docs/方案-dsh-turn-cost.md` 里的**计费口径 / 费率分档 / 额度归因边界 / 隐私边界**等设计决策仍然有效。
+
+### Fixed
+
+- **`foldFor` 的解析顺序与缓存语义**（行为测试发现的两个真实缺陷）：① 官方路径此前**每次调用都重读持久历史**，缓存只省下折叠而没省下读取；② 缓存只在 live 路径被查询，而一处已被缓存的**不可变**折叠会在该会话重新变为 live 后被继续沿用。现在顺序为「live 内存日志 → 官方 `ctx.sessionQuery` → 日志扫描兜底」，并用 `session.seq`（live 日志自身长度，零 I/O）与缓存的 `sq:<n>:<seq>` 签名比较来决定是否重读；签名形状不认识的一律重读，宁可多读不冒陈旧风险。
+
+### Added
+
+- **真实服务行为测试**（`test/session-source.test.mjs`，9 项）：用最小 Cordis 上下文实例化真实 `TurnCostService` 并**实际调用** `foldFor` / `sessionTotals` / `query`，覆盖官方 `sessionQuery` **正常**、**缺失**、**读取抛错**三条路径，以及 live 缓存/增长、无 usage 返回 null、非法 sessionId 拒绝、卸载后缓存清空。此前的用例只断言源码字符串，不能证明官方服务路径真的工作。
+- `docs/迁移说明-0.6.0接入方式.md`：本轮删除清单、理由、以及旧文档的有效/失效边界。
+
+### Notes
+
+- **验证证据（2026-10-03，家用机，桌面宿主 0.2.0-rc.2）**：`npm test` **80/80 PASS**；`npm run check` 四个 `lib/*.js` 全过；`git diff --check` 干净；`node tools/peer-compat.mjs --runtime 0.2.0-rc.2` exit 0。
+  - **官方安装路径（真实宿主，官方 Plugin Manager）**：`plugin_manager install_bundle` → `application: "applied"`，装成 `link:` 并自动追加进 `dsh.profile.bundles`。
+  - **host 半真正挂载**（官方 Inspect Provider）：`Config.listConfigs` 出现 `include:turn-cost` → `status: "schema"`、`packageDir` 指向该 profile 的 `node_modules\dsh-turn-cost`、并投影出插件自己的 Config JSON Schema。
+  - **client 半真正注册**（官方 client Inspect Provider）：`Slots.listSubTree {"root":"conversation.chat.assistant-actions"}` 的 `occupants` 里出现 `{ id: "turn-cost", active: true }`，与官方 `feedback` 并列。
+  - 验证用的安装已 `remove_bundle` 卸载，`profiles/desktop/package.json` 已回到安装前内容，遗留 junction 已删除；**未改动、未重启正在使用的宿主**。
+- **未验证项**：界面渲染**未人工目检**（组件已注册进官方槽位 ≠ 看起来对）；Kimi/阿里两条订阅额度读数本轮未实测。详见 `CURRENT_STATE.md`。
+- **上一版（0.5.3）的隔离宿主「未挂载」结论已更正**：那是我自建 harness 的缺陷——`dsh plugin add` 在空 profile 上只装入 `dsh-base` + 本插件，**该 profile 没有宿主/客户端应用层**，所以什么都不挂载；补装 `dsh-web-app` 时又被 pnpm 构建脚本策略拦下，从未构成有效应用组合。早前那轮用 `--patch` + 绝对路径的做法，按官方文档只是**仓库内教程式**开发回路，从来不是第三方插件的接入路径。
+
+## [0.5.3] - 2026-10-03
+
+### Fixed
+
+- **修复 DSH 0.2.x 拒载（`incompatible-version`）**：插件 `peerDependencies` 里的 `@deepseek-ai/dsh-home-paths` / `@deepseek-ai/dsh-typert-protocol` 此前钉在 `^0.1.0-rc.6`，而官方 dsh 自 0.2.0 起在启动与安装时用 semver 校验这些 peer，不满足即**整包拒载**（`Error: Plugin dsh-turn-cost@0.5.2 is incompatible with dsh 0.2.0-rc.2`，需 `dsh plugin allow-version` 豁免才能起）。桌面应用升级到 `@deepseek-ai/dsh-desktop-runtime@0.2.0-rc.2` 后，插件实际处于「装着但起不来」状态。
+  - 两个 peer 范围改为 `>=0.1.0-rc.6 <0.3.0-0`：下界保持 0.1 线可装，上界用 `-0` 预发布哨兵——官方按 `includePrerelease` 求值，普通的 `<0.3.0` **会放进 `0.3.0-rc.1`**（已对本机运行时的 semver 7.8.5 实测确认），加 `-0` 才真正排他。
+  - 宿主侧 API 未变更：`dshHomePath`、`Remote`、`TypertRemoteService`、`Service`、官方 slot `conversation.chat.assistant-actions` / `conversation.composer.dock` 在 0.2.0-rc.2 全部存在（逐个核对运行时导出与实时 slot 树）。
+
+### Changed
+
+- **会话历史改走官方 `ctx.sessionQuery`**：host 端折叠一个会话时先用官方会话查询服务（`readSession(id).events`，live 优先、带重放校验、返回脱离副本），不再自行解析 `<dsh-home>/sessions/**` 的 zstd 多帧 JSONL 与日志文件名。日志命名代次（v0/v2/v3/v4…）、压缩格式与「持久日志 + 运行中会话」的合并从此归宿主维护——0.5.2 修的 V3 文件名适配就是这类漂移的一次实例。
+  - 新增纯函数 `foldSessionEvents(events)`：把官方事件日志折成与日志扫描完全相同的 `{ signature, samples, title }`，两条来源共用一个折叠实现（单测断言二者逐样本相等）。
+  - 缓存签名由 `size:mtime` 改为 `sq:<事件数>:<最大 seq>`，不再依赖文件系统元数据。
+  - `static inject` 收回到 `["sessions"]`：`sessionQuery` 由后端插件挂载，写进 inject 会让「没有该后端」的组合把整个插件挂住，而那正是兜底路径要服务的场景（官方口径：可选依赖用 `ctx.get()` 在调用点取，不进 inject）。
+  - **保留最小必要兜底**：组合里没有 `sessionQuery` 后端、或官方读取抛错时，仍回退到原日志扫描（`foldFromLog`）；两条路径都有单测，官方读取失败不会让读数变空。
+
+### Added
+
+- **交付门禁新增 `peer-compat` 步骤**（`maintenance.ps1 verify` 第 3 项）：`tools/peer-compat.mjs` 对本机每个已知 DSH 运行时版本判定插件的 `@deepseek-ai/dsh*` peer 范围。
+  - **范围数学全部交给标准 `semver` 包**，并使用与官方完全相同的选项 `{ includePrerelease: true }`；本文件不再自实现 semver。之前的自写实现在「`^` 基数本身是预发布」与「上界与预发布比较」两处与 semver 不一致，已由此消除（`test/peer-compat.test.mjs` 里有一条差分断言，逐例对照 `semver.satisfies`）。
+  - 判定器：`semver.subset` 校验声明的区间**恰好等于**已复核窗口 `>=0.1.0-rc.6 <0.3.0-0`（收窄、放宽都 FAIL），并保留 `REVIEWED_MINOR_LINES = ["0.1","0.2"]` 作为「人工已复核的次版本线」清单——出现未复核的运行时线即 FAIL，而不是静默放过。
+  - **发现不到任何运行时版本时返回 FAIL**（可用 `--runtime <版本>` 补，例如正在运行宿主的 `dsh --version`）：未验证的 peer 窗口不算通过，不再是「没找到就 PASS」。
+  - 单测 8 项覆盖：0.5.2 现场回归、`0.3.0-rc.1` 必须被拒（含「`<0.3.0` 在 includePrerelease 下会放过它」的反证）、区间收窄/放宽必须 FAIL、无运行时必须 FAIL、与 `semver.satisfies` 的逐例一致性。
+
+### Notes
+
+- **不改宿主、不动部署副本**：`versions.json` 的安装器固定版本仍是 `0.1.1-rc.2`（**未同步到 0.2 线**，因为 Windows 一键包/验收链尚未对 0.2 运行时重建验证）；本版只把插件的兼容范围写实，使 0.1 与 0.2 两条线都能装。
+- **`versions.json` 与正在使用的宿主已脱节**：本机桌面应用携带 `@deepseek-ai/dsh-desktop-runtime@0.2.0-rc.2`，而安装器固定的是 `0.1.1-rc.2`。下一次一键包发布前需重新固定并重跑 `sync-versions` + 验收。
+- 官方**没有**任何价表/成本/余额服务（子系统索引与 `packages/llm` 均无；`dsh-token-meter` 明说其数值「是参考值、不是账单」），因此内置费率卡与本地 `rates.json` 叠加**继续保留**——这是官方缺口，不是重复建设。`dsh-token-meter` 的估算口径也不能替代 provider 上报的逐桶 usage，故计价原料仍取 `assistant/message` 的 `usage`。
+- 验证（2026-10-03，家用机）：`node --test "test/*.test.mjs"` **85/85 PASS**；`maintenance.ps1 verify` **7/7 PASS**（新增 peer-compat）；`node --check` 四个 `lib\*.js` 全过；只读真日志抽查 **885/885** 个会话目录可枚举（v0 353 / v3 313 / v4 219），`foldSessionEvents` 与日志扫描结果逐样本一致；兼容性由**运行时自身的** `evaluatePluginCompatibility` 前后对照判定（旧 peer 块 REJECTED → 新 peer 块 COMPATIBLE）。
+- **隔离宿主端到端（部分通过，未完成）**：在临时目录装官方 `@deepseek-ai/dsh@0.2.0-rc.2` 建独立 `DSH_HOME`，用官方 `dsh plugin --profile t1 add <tgz>` 装本包 —— **通过**（写到 `dependencies: file:...tgz`、`dsh.profile.bundles` 追加 `dsh-turn-cost`、装到 0.5.3、`--dump-config` 组合出 `turn-cost` 行且无 `incompatible`/`skipping` 告警）；`dsh web` 起在该隔离宿主上**返回 200**。但该隔离宿主的 boot 图里**没有** `dsh-turn-cost` 客户端条目，且插入的探针行也没被执行 → **判定「隔离宿主里插件未真正挂载」，原因未查明**（该 profile 缺 `@deepseek-ai/dsh-web-app` 的 bundle 层、命令转发/加载器行为差异等均为未排除假设）。**因此本版不声称端到端验证通过**；真实宿主目检仍是未验证项，见 `CURRENT_STATE.md`。
+
 ## [0.5.2] - 2026-09-11
 
 ### Fixed

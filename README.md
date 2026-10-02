@@ -73,10 +73,10 @@ Kimi 订阅会话的读数条与每轮徽章会追加官方实时额度读数：
 
 ## 自定义费率表
 
-内置价表只覆盖 DeepSeek 官方按量模型。其它模型（自部署、中转、订阅制）用本机 JSON 文件叠加：
+内置价表只覆盖 DeepSeek 官方按量模型；订阅额度路由也**内置默认**，不配任何东西就能用。其它模型（自部署、中转、订阅制）用本机 JSON 文件叠加：
 
 1. 复制 [rates.example.json](./rates.example.json) 到本机任意位置（如 `<dsh-home>/turn-cost-rates.json`），按注释口径改；
-2. 在 `<dsh-home>/profiles/web/cordis.patch.yml` 用同 id 覆盖插件配置（用户层后应用、同 id 行胜出）：
+2. 在**你正在用的 profile** 的 `cordis.patch.yml` 里用同 id 覆盖插件配置（用户层后应用、同 id 行胜出）；桌面版就是 `~/.dsh/profiles/desktop/cordis.patch.yml`：
 
 ```yaml
 - id: turn-cost
@@ -85,7 +85,9 @@ Kimi 订阅会话的读数条与每轮徽章会追加官方实时额度读数：
     ratesPath: <dsh-home>\turn-cost-rates.json   # 改成你的实际路径
 ```
 
-3. 重启 dsh web 生效。
+3. 重启宿主生效（插件组合在启动时装载）。
+
+> **不配会怎样？** 官方 DeepSeek 按量金额与订阅额度读数照常工作（内置卡 + 内置路由）；只有**你这个文件本身被忽略**——自定义模型价、订阅路由的 0 价登记、`quota` 块里的端口/命令覆盖都不会生效。所以自己维护了这张表就一定要接上。
 
 费率表口径：
 
@@ -116,64 +118,68 @@ Kimi 订阅会话的读数条与每轮徽章会追加官方实时额度读数：
 
 ## 安装
 
-### 方式一：Windows 一键包
+本插件是**标准 dsh bundle**（`package.json` 里声明 `dsh.bundle` + `dsh.client`），安装与启用**全部由 dsh 官方负责**，本仓库不提供也不维护任何安装器、启动脚本或宿主版本固定：
 
-> ⚠️ **目前未提供**：本仓库尚未发布任何 Release 资产，Releases 页是空的，因此下面这条路径暂时走不通。长期仍以一键包为首选安装方式；补齐步骤（对齐 `versions.json` 的 DSH 版本 → `maintenance.ps1 verify` → `acceptance` 实机验收 → 构建并上传 ZIP）见 `docs/DEVELOPMENT.md` 与 `maintenance.ps1 build`。**现在请用方式二或方式三。**
+| 方式 | 地址形式 | 命令 / 入口 |
+|---|---|---|
+| 官方 CLI | 本地工程路径 | `dsh plugin --profile <profile> add <本仓库绝对路径>` |
+| 官方 CLI | npm 包名 | `dsh plugin --profile <profile> add dsh-turn-cost` |
+| 官方 CLI | Git 仓库 | `dsh plugin --profile <profile> add github:WFMinerva/dsh-turn-cost` |
+| 官方 CLI | 打好的 tarball | `dsh plugin --profile <profile> add <绝对路径>.tgz` |
+| 应用内 | 以上任一 | 侧边栏「插件」页 → **添加插件** |
 
-1. 从 [Releases](https://github.com/WFMinerva/dsh-turn-cost/releases) 下载最新版 `dsh-turn-cost-setup-*-win-x64.zip`，解压后双击 `安装.cmd`；不要直接在 ZIP 预览器里运行。
-2. 安装器会备份 web profile、安装固定插件包与隔离的 DSH/Kimi/百炼 CLI，并生成 `~/.dsh/turn-cost-launcher/启动 DSH（含额度）.cmd`。
-3. 先运行“配置额度登录”：由你在官方页面完成 `kimi login` 与百炼控制台 OAuth。模型 API Key 仍由你在 DSH「设置 → 模型」里手动输入；两层凭据不能互相替代，安装器不会读取或写入 `.credentials.yaml`。
-4. 日常从“启动 DSH（含额度）”启动；它会按需启动 Kimi loopback 服务，再启动 DSH。需要恢复时运行同目录的“回滚上一次安装”或“卸载”。
-
-安装器不需要管理员权限，不改全局 npm、代理、防火墙、系统执行策略或开机任务。完整说明见 ZIP 内 `README-安装说明.txt`。
-
-### 方式二：npm
-
-> ⚠️ npm 上目前仅发布到 **0.1.3**（基础金额显示），**明显落后于本仓库**：订阅额度窗口、Kimi 自动拉起（0.5.0）、Flash 家族重定价与价表时间分档（0.5.1）、DSH 会话格式 V3 日志名适配（0.5.2）均未发布。用这条命令装到的是旧版，如需最新功能请用方式三（方式一一键包当前未提供）。
-
-```bash
-dsh plugin --profile web add dsh-turn-cost
-# 在 profile 的 package.json 的 dsh.profile.bundles 里追加 "dsh-turn-cost"
-```
-
-然后重启 dsh web 并刷新页面。
-
-### 方式三：本地打包安装（无 release、无 npm 发布时用这条）
-
-在本仓库检出目录里打包，再让 profile 用 pnpm 装上——依赖（`@deepseek-ai/schemastery` 等）由 pnpm 按 `package.json` 正常解析，比手工拷贝目录可靠。**Windows 家用机 2026-09-11 实测可用**：
+- **本地工程路径**是最省事的日常方式：pnpm 会把它装成 `link:`（指向你的检出目录），改完代码重启该 profile 即生效，不需要每次重新打包。
+- `file:` 形式与裸目录路径的差别：**裸目录 → `link:`（符号链接，改代码即生效）**；`file:./路径` → 复制进 profile（等同于注册表安装，适合冻结版本）。
+- 安装后 dsh 会自动把 `dsh-turn-cost` 追加进该 profile 的 `dsh.profile.bundles`——**这些你不用手写**。
+- **重启该 profile 才生效**：bundle 成员是启动期决定的（`dsh web` 重新起、桌面应用完全退出再打开）。普通配置改动才走热重载。
 
 ```powershell
-npm pack                                                  # 产出 dsh-turn-cost-<版本>.tgz
-dsh plugin --profile web add <tgz 的绝对路径>              # 例：dsh plugin --profile web add F:/Work/dsh-turn-cost/dsh-turn-cost-0.5.2.tgz
+# 例：装进正在用的桌面 profile（桌面应用需先完全退出，装完再打开）
+dsh plugin --profile desktop add F:\Workspaces\dsh-turn-cost
+
+# 卸载
+dsh plugin --profile desktop remove dsh-turn-cost
 ```
 
-然后：
+> **不需要构建步骤**：host 端与 client 端都是仓库里已就绪的产物（`lib/index.js` / `lib/client.js`），官方要求的是「启动时 `lib/client.js` 已存在」，本仓库始终满足。
 
-1. 确认 profile 的 `package.json` 里 `dsh.profile.bundles` 含 `"dsh-turn-cost"`（缺了手动追加到数组末尾）。
-2. 重启 dsh web 并刷新页面（host 端插件不支持热加载，**必须重启**）。
+## 兼容性
 
-> 说明：`dsh plugin` 是 pnpm 转发器，路径参数**用绝对路径**最稳（转发时命令在 profile 目录下执行）；装完 `dsh.profile.bundles` 若未自动写入，按上面第 1 步补。
->
-> 不推荐把仓库目录直接拷进 `<dsh-home>/profiles/web/node_modules/dsh-turn-cost/`：本包 `files` 只发布 `lib/`、`cordis.patch.yml`、`rates.example.json`，整仓拷贝会连 `scripts`、`test/`、`docs/` 一起带进去，且**不会安装运行依赖**——真跑起来只能碰巧借用 profile 里别的 bundle 带进来的传递依赖。
+插件在 `peerDependencies` 里把宿主提供的包声明为 `"*"`，所以 **dsh 的兼容性门禁永远不会因为版本区间拒绝本插件**（官方 dsh ≥ 0.2.0 会在启动/安装时按 semver 校验 `@deepseek-ai/dsh*` peer，不满足即整包拒载并要求 `allow-version` 豁免）。
+
+真正被钉住的是 `devDependencies`——那份**精确**版本才是本实现被复核过的宿主 API：`@deepseek-ai/cordis@4.0.4`、`@deepseek-ai/dsh-home-paths@0.2.0-rc.2`、`@deepseek-ai/dsh-typert-protocol@0.2.0-rc.2`（与 dsh 0.2.0-rc.2 桌面运行时逐项一致）。升级宿主后要重新核对这三个包的 API 面，再调这三个 pin。
+
+```powershell
+node tools/peer-compat.mjs --runtime 0.2.0-rc.2   # 校验 peer 模型未被破坏
+```
+
+费率与额度口径见下文；本插件不联网拉价、不读凭据。
+
+
 
 ## 开发与维护
 
 本项目持续维护中。接手开发（包括新开一个对话的 AI）请先读：
 
-- [docs/DEVELOPMENT.md](./docs/DEVELOPMENT.md) — 完整地图：仓库结构、DSH 插件机制的关键坑、计费口径不变式、发布流程
+- [CURRENT_STATE.md](./CURRENT_STATE.md) — 实时状态：环境事实、已验证证据、未验证项
+- [docs/DEVELOPMENT.md](./docs/DEVELOPMENT.md) — 完整地图：仓库结构、DSH 插件机制的关键坑、计费口径不变式
 - [CHANGELOG.md](./CHANGELOG.md) — 版本变更记录
 - [Issues](https://github.com/WFMinerva/dsh-turn-cost/issues) — 维护 backlog
 
-本地维护统一入口（推荐；Codex / Kimi Code / Claude Code / DSH / 纯人工 PowerShell 同一口径）：
+本地验证入口（`package.json` scripts 之外也能直接跑）：
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File maintenance.ps1 verify                     # 确定性静态门禁（退出 0 才可交付）
-powershell -NoProfile -ExecutionPolicy Bypass -File maintenance.ps1 build -ReproducibilityCheck
-powershell -NoProfile -ExecutionPolicy Bypass -File maintenance.ps1 doctor                     # 只读环境体检
-powershell -NoProfile -ExecutionPolicy Bypass -File maintenance.ps1 acceptance                 # 实机验收（必须在 DSH 之外运行；原始报告不入库）
+npm ci                                                   # 按 lockfile 装开发依赖（宿主包 pin 与运行时一致）
+npm test                                                 # node --test，全部单元/行为测试
+npm run check                                            # 四个 lib/*.js 的 node --check
+node tools/peer-compat.mjs --runtime <dsh --version>      # peer 模型 + 宿主版本核对
 ```
 
-裸测试仍可单跑：先 `npm ci --ignore-scripts --no-audit --no-fund`，再 `node --test`；Windows 安装器夹具 `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\test\windows-installer.test.ps1`（端口注入隔离宿主，无需关闭 DSH）。
+**本仓库刻意不再包含的东西**（它们已归 dsh 官方，见 `docs/DEVELOPMENT.md` §二）：
+
+- 没有安装器、启动脚本、回滚/卸载入口——用官方 `dsh plugin add/remove` 或应用内「添加插件」
+- 没有固定宿主版本、没有 profile 路径假设——`dsh plugin` 自己维护 profile 与 bundle 清单
+- 没有 `acceptance` 实机验收链——验收就是「按官方方式装上去、打开 UI 看读数」
 
 ## License
 
