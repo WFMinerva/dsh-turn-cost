@@ -5,7 +5,7 @@
 > **状态口径**：只写「已用命令/工具核到的事实」，并标明核对的时点与机器。凡未经核实一律写进「未验证项」，不写成完成；**「装得上」「dump-config 正常」「HTTP 200」「界面有渲染」都不算「跑起来了」**。
 
 - **当前分支**：master
-- **HEAD**：见 §九 发布记录（本轮提交号在记录提交中回填；页面顶部的 `29b38d8`／`839db31` 属 0.6.1 轮）
+- **HEAD**：`e13fe3d`（`fix: 0.6.2 — 补齐中国法定节假日全天闲时规则，清除失效的 Pro 切价注释`；已推送，`origin/master` 同步。此前 `29b38d8`／`839db31` 属 0.6.1 轮）
 - **工作树**：干净（无未提交改动；`node_modules/`、`*.tgz`、`.tmp-*` 按 `.gitignore` 排除）
 - **发布状态**：**npm `dsh-turn-cost@0.6.2` 已发布**，`dist-tags.latest = 0.6.2`；**0.6.1 未被改写**（仍在 registry 上，`dist-tags` 里让位给 0.6.2）。
 - **本轮授权范围**：机主授权「按新版本完成修复 → 提交 → 推送 → CI 通过后发布 npm；不得覆盖已发布的 0.6.1」。桌面 profile 的 `link:` 安装**保持不动**。
@@ -85,7 +85,28 @@ git diff --check    → 干净
 - 也就是说：**本机金额差额为 ¥0 是可解释的真实结果**——假期里真正落在高峰窗口的流量恰好全在订阅路由上；缺陷的金额影响由「同 token 走按量卡」的量级（¥6.54）与单测固定。
 - 机主举的三个时点里，**10-01 10:00（12 个样本）与 10-02 15:00（42 个样本）在本机真实日志中存在**且都命中该缺陷；**10-05 10:00 本机没有样本**，仅作规则示例。
 
-### 4）官方路径与界面（发布后补，见 §九）
+### 4）已发布包的官方路径验证（隔离宿主，2026-10-03）
+
+```
+$env:DSH_HOME='C:\Temp\dsh-tc-pub2'
+dsh pub2 --from-default-profile web --dump-config        # 官方模板建隔离 profile
+copy .dsh\storages、.dsh\sessions\--F-Workspaces-dsh-turn-cost--\<sessionId>   → 隔离 home
+dsh plugin --profile pub2 add dsh-turn-cost@0.6.2        # registry 安装（非 link:）
+dsh --profile pub2 --no-open --port 19403                # 打印带 token 的本地 URL
+node rpc.mjs "<带 token 的 URL>" <sessionId>             # 官方 wire：POST /api/turnCost/*
+```
+
+| 项 | 结果 |
+|---|---|
+| 安装形态 | `dependencies: {"dsh-turn-cost":"0.6.2"}`（**非 `link:`**）、安装目录 `LinkType` 为空、`dsh.profile.bundles` 自动追加；pnpm 从 registry 解析下载 |
+| 包内容 | 已安装的 **10 个文件与仓库逐文件 SHA256 全部 MATCH**（含 `README.md`） |
+| `turnCost/sessionTotals` | `cost=7.70550156, steps=681, priced=681, unpriced=0, models=["deepseek-flash"]`；标题读自日志 |
+| 逐轮 `turnCost/query` | `2.52076228 + 1.80360808 + 1.65231392 + 0.43785796 + 0.44086068 + 0.24160248 + 0.60849616 = 7.70550156`，**恰等于会话汇总**（差 ¥0.00000000） |
+| `{messageId}` 定位 | 消息 `36c3e026-…` → turn 1，`¥2.52076228`；与同一消息所在 `{turn:1}` 定位**同值** |
+| 与独立实现互校 | 同一份会话副本（681 步）用仓库 `lib/fold.js` 独立重算 = **¥7.70550156**，逐轮数字与宿主 RPC **逐项相同** |
+| 界面层 | **本轮未重新目检**；`lib/client.js` 与已目检过的 0.6.1 **逐字节相同**（SHA256 `C7089174…`），本轮只改宿主半（`lib/fold.js` SHA256 `4295C36E…` → `2908F04E…`） |
+
+> 注意：这条会话是**周六**（2026-10-03）跑的，两版规则给出的金额本来就相同（643 → 681 步两次读取均如此）；它在本轮的作用是**证明发布包能算出正确的数**，不是证明假日规则生效——假日规则由单测与 §二.2/§二.3 的全量重算证明。
 
 ## 三、上一轮（0.6.1）记录摘要
 
@@ -123,7 +144,7 @@ git diff --check    → 干净
 
 ## 六、未验证项 / 边界（不要当成已完成）
 
-- ~~桌面宿主需要重启~~ / ~~界面观感未目检~~：0.6.1 轮已由机主重启并目检通过（约 ¥5.98，估算费用）。**0.6.2 尚未经机主目检**（本轮未重启桌面端，插件仍以 `link:` 指向检出目录，重启后即是新代码）。
+- ~~桌面宿主需要重启~~ / ~~界面观感未目检~~：0.6.1 轮已由机主重启并目检通过（约 ¥5.98，估算费用）。**0.6.2 的界面层未重新目检**：本轮只改宿主半，`lib/client.js` 与 0.6.1 逐字节相同（SHA256 已核），而桌面宿主仍在跑启动时加载的 0.6.1 代码——**插件以 `link:` 指向检出目录，机主重启桌面端后即加载 0.6.2**（本轮未重启，按红线 3 不擅自重启正在使用的宿主）。
 - **2027 年及以后的法定节假日未收录**：未收录年份的假期会按普通工作日计价（偏高）。属已知边界，国务院公布后按 `docs/DEVELOPMENT.md` §三 补表 + 补测试。
 - **调休上班的周末没有独立测试数据**：本机日志里 9/20 有 131 个样本（`kimi-coding/k3`，无单价）、10/10 尚无样本；「调休周末按空闲价」目前由周末规则 + 单测覆盖，**无实机金额证据**。
 - **Kimi / 阿里两条订阅额度读数仍未实测**：隔离宿主里两条路由都返回 `ok:false`（该环境没有 loopback OAuth 服务、没有 `bl` CLI）；插件侧只有「路由配置 → 端点归一化」的单测覆盖（`normalizeKimiLocalUsage` / `normalizeAliyunBl`），**没有端到端实机读数**，因此**不声称额度读数可用**。
@@ -137,22 +158,24 @@ git diff --check    → 干净
 - 构建机 Node `v24.18.0` / npm `11.16.0`；宿主运行时 Node 24.21.0 / pnpm 11.7.0。`dsh --version` = **0.2.0-rc.2**（CLI 不在 PATH，桌面应用自带 `...\resources\runtime\cli\bin\dsh.cmd`）。
 - 会话根 `~/.dsh/sessions`：**887** 个会话日志、**630 MiB**，本轮全量重算**全部可读**（0 个失败）。
 - 本机流量分布（对本轮结论重要）：**已计价**（DeepSeek 按量）流量集中在 **00:00–06:00 北京时间**；白天的高峰窗口流量主要落在**订阅路由**（`kimi-coding/k3`、`zai-coding-cn/glm-5.3`）上，无单价。
-- **不可同步数据**：`node_modules/`；个人费率表（`~/.dsh/turn-cost-rates.json`，不在仓库内）；`%TEMP%\dsh-tc-inspect` 下的核对脚本（`recompute-session.mjs`、`scan-holidays.mjs`、`scan-holiday-days.mjs`、`scan-holiday-hours.mjs`、`scan-holiday-models.mjs`、`scan-holiday-scale.mjs`、`rpc.mjs`、`cdp.mjs`）。
+- **不可同步数据**：`node_modules/`；个人费率表（`~/.dsh/turn-cost-rates.json`，不在仓库内）；`%TEMP%\dsh-tc-inspect` 下的核对脚本——本轮实际保留：`recompute-session.mjs`（单会话按步骤重算）、`scan-holidays.mjs`（全量重算）、`scan-holiday-days.mjs` / `scan-holiday-hours.mjs` / `scan-holiday-models.mjs` / `scan-holiday-scale.mjs`（假期样本取证）、`rpc.mjs` / `turns.mjs`（官方 wire 查询，`method` 必须写**完整端点名** `turnCost/<方法>`，否则网关回 `method … does not match endpoint`）。0.6.1 轮的 `cdp.mjs` / `cdp-net.mjs` / `inspect-session.mjs` 等在当轮清理时已删除，本轮未重建（界面层未重新目检，理由见 §六）。
 
 ## 八、已验证机器
 
-家用机（0.6.2 假日规则 + 全量重算 + 官方源实抓，2026-10-03）；家用机（0.6.1 真因定位 + 隔离宿主端到端 + 无头浏览器逐轮核对 + 机主目检，2026-10-03）；家用机（0.6.0 官方接入改造 / 官方路径三层验证 / 80 项测试，2026-10-03）；家用机（0.5.3 / 0.5.2 / K3 双层复检，2026-09）；单位机（0.5.1，2026-09-10）；单位机（0.5.0，2026-09-02）
+家用机（0.6.2 假日规则 + 全量重算 + 官方源实抓 + 发布包隔离验证，2026-10-03）；家用机（0.6.1 真因定位 + 隔离宿主端到端 + 无头浏览器逐轮核对 + 机主目检，2026-10-03）；家用机（0.6.0 官方接入改造 / 官方路径三层验证 / 80 项测试，2026-10-03）；家用机（0.5.3 / 0.5.2 / K3 双层复检，2026-09）；单位机（0.5.1，2026-09-10）；单位机（0.5.0，2026-09-02）
 
 ## 九、0.6.2 发布记录（2026-10-03）
 
 | 环节 | 结果 |
 |---|---|
-| 提交 | 待回填（本轮修复提交，含 `lib/fold.js` / `test/fold.test.mjs` / `CHANGELOG.md` / `README.md` / `docs/DEVELOPMENT.md` / `package.json` / `package-lock.json` / 本文件） |
-| 推送 | 待回填 |
-| CI | 待回填（运行号与结论） |
-| 发布 | 待执行 |
-| registry | 待核对 |
-| 已发布包验证 | 待执行 |
-| 清理 | 待执行 |
+| 提交 | **`e13fe3d`** `fix: 0.6.2 — 补齐中国法定节假日全天闲时规则，清除失效的 Pro 切价注释`（8 文件，+334 / −100；`git diff --check` 干净；无临时文件、个人配置或凭据进入版本库） |
+| 推送 | `839db31..e13fe3d  master -> master` |
+| CI | run **[37065886501](https://github.com/WFMinerva/dsh-turn-cost/actions/runs/37065886501)** job `npm ci + tests` ✓（`headSha` 与提交一致） |
+| 发布 | `npm publish` 被 EOTP 拦住（同 0.6.1：npm 11 默认 web 认证，浏览器 URL 里 `authId` 被打成 `***`，无法转交），**由机主在自己终端完成 2FA 发布**；registry 在轮询 80 s 内出现 0.6.2 |
+| registry | `dist-tags.latest = 0.6.2`；`dist.shasum = 2799f424d162372b0ad42e4d7e75966c1f8fc0b0`（与发布前 dry-run 指纹**逐位一致**）；**0.6.1 仍在 registry 上、未被改写** |
+| 包内容 | 隔离宿主安装的 10 个文件与仓库**逐文件 SHA256 全部 MATCH**；`README.md` 是新的 93 行版本 → **npm 页面 README 不再是旧的 186 行版**（`npm view dsh-turn-cost@0.6.2 readme` = 93 行、含新增「节假日」行、不再含「订阅额度」章节），0.6.1 留下的 README 不一致问题随之关闭 |
+| 官方安装 | 隔离宿主（`$DSH_HOME=C:\Temp\dsh-tc-pub2`，官方 `--from-default-profile web`）执行 `dsh plugin --profile pub2 add dsh-turn-cost@0.6.2`：`dependencies` 写成 `"0.6.2"`（**非 `link:`**）、安装目录 `LinkType` 为空、pnpm 从 registry 下载、`dsh.profile.bundles` 自动追加 |
+| 已发布包的费用查询 | 见 §二.4：`turnCost/sessionTotals` = `7.70550156`（681 步、全计价），逐轮求和与之**恰等**，`{messageId}` 与 `{turn}` 定位同值，且与仓库 `lib/fold.js` 的独立重算**逐项相同** |
+| 清理 | 隔离宿主已关停（19403 无监听）、临时 home 与 0.6.1 tarball 解包目录已删除；**桌面 profile 未重启、未改动**（实测仍是 `Junction → F:\Workspaces\dsh-turn-cost`） |
 
 > 观察到的**噪声**（不影响结论）：官方 `dsh plugin add` 在此组合下会打印一条 pnpm 的 `Issues with peer dependencies found` 警告——因为官方 bundle（`@deepseek-ai/dsh-*`）由应用运行时提供、不在 profile 的 node_modules 里，pnpm 看不到它们。dsh 自己的兼容性门禁只判 `@deepseek-ai/dsh*` 的 `peerDependencies`，本插件全为 `"*"`；启动无 `skipping`、host 与 client 均正常挂载即为证。
