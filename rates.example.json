@@ -13,39 +13,30 @@
     "deepseek-v4-flash": {
       "peak": { "input": 2.0, "cacheRead": 0.04, "output": 8.0 },
       "offPeak": { "input": 1.0, "cacheRead": 0.02, "output": 4.0 },
-      "note": "退役 id（2026-09-10 起由 V4.1 Flash 服务并按新 Flash 价）；内置表已为它和 vision-exp 保留 2026-08-17 旧价历史档，此处平价覆盖会丢掉历史档"
+      "note": "退役 id：2026-09-10 起由 V4.1 Flash 服务并按新 Flash 价。内置价目已为它保留 2026-08-17 的旧价历史档；这里用平价覆盖会丢掉那个历史档，仅供理解写法"
     },
-    "k3-256k": {
+    "my-self-hosted-model": {
+      "input": 1.5,
+      "cacheRead": 0.15,
+      "cacheWrite": 0,
+      "output": 6.0,
+      "note": "示例占位（数字不是任何厂商的报价）：按你自己的实际单价填写；单位是元 / 百万 token，未写的字段按 0 计"
+    },
+    "my-subscription-model": {
       "input": 0,
       "cacheRead": 0,
+      "cacheWrite": 0,
       "output": 0,
-      "note": "Kimi Allegro 订阅：按周期窗口限流，无 token 单价，只展示 token"
+      "note": "没有 token 单价的按套餐计费模型：四个单价都写 0 并加 note，这样只显示 token、金额恒为 0，不编造价格"
     },
-    "qwen3.7-max": {
-      "input": 0,
-      "cacheRead": 0,
-      "output": 0,
-      "note": "阿里云 Token Plan：按套餐额度抵扣，系数以官方页为准，核实后自行填价"
-    },
-    "qwen-token-plan-cn/deepseek-v4-pro": {
-      "input": 0,
-      "cacheRead": 0,
-      "output": 0,
-      "note": "provider/模型 写法：同一模型经 Token Plan 池走订阅抵扣；经官方路由仍按内置 CNY 价"
+    "my-provider/my-model": {
+      "input": 0.8,
+      "cacheRead": 0.08,
+      "output": 3.2,
+      "note": "写法 <provider>/<model>：区分同一模型在不同来源上的单价，优先于同名的不带来源写法"
     }
   },
   "aliases": {
-    "k3": "k3-256k"
-  },
-  "quota": {
-    "kimi-coding": {
-      "kind": "kimi-usages",
-      "baseUrl": "http://127.0.0.1:58627",
-      "_note": "Kimi 订阅窗口：只走 Kimi Code 官方 loopback OAuth 服务；先运行 kimi login，日常 Windows 启动器会按需启动 58627 服务"
-    },
-    "qwen-token-plan-cn": {
-      "kind": "aliyun-bl",
-      "_note": "阿里 Token Plan：调官方 bl CLI；用 bl auth login --console --console-site domestic 完成浏览器 OAuth，0.4.2 安装流程不接收或保存 AK/SK；可用 command 改可执行名"
-    }
+    "my-model-alias": "my-self-hosted-model"
   }
 }
