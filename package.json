@@ -23,7 +23,8 @@
     "lib",
     "cordis.patch.yml",
     "rates.example.json",
-    "README.md"
+    "README.md",
+    "assets"
   ],
   "scripts": {
     "test": "node --test \"test/*.test.mjs\"",

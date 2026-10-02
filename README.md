@@ -6,6 +6,16 @@
 
 A [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (dsh) web plugin that shows an estimated cost per turn and per conversation, priced from provider-reported token usage with a local rate table — the built-in official DeepSeek CNY card, optionally overlaid with your own.
 
+## 界面
+
+会话累计（输入框上方，与 dsh 官方统计条同一带）：
+
+![会话累计读数与官方统计条并排](assets/screenshots/session-total.png)
+
+每轮费用（每条 AI 回复的操作行）：
+
+![每轮费用读数](assets/screenshots/per-turn-cost.png)
+
 ## 功能
 
 **每轮费用**：每条 AI 最终回复的操作行里多一行灰色小字。
