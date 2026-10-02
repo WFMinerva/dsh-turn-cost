@@ -5,9 +5,10 @@
 > **状态口径**：只写「已用命令/工具核到的事实」，并标明核对的时点与机器。凡未经核实一律写进「未验证项」，不写成完成；**「装得上」「dump-config 正常」「HTTP 200」「界面有渲染」都不算「跑起来了」**。
 
 - **当前分支**：master
-- **HEAD**：`4a191f7`（与 `origin/master` 同步：`git rev-list --left-right --count origin/master...master` = `0  0`）
-- **dirty**：0.6.0（官方接入改造）+ **0.6.1（修掉「金额恒为 `?`」）均未提交**；npm 未发布（仍是 0.1.3）；未 push。
-- **版本**：仓库为 **0.6.1**。0.6.0 从未提交、从未发布，其 tarball 已被 0.6.1 取代。
+- **HEAD**：`29b38d8`（`release: 0.6.1 …`；已推送，`origin/master` 同步）
+- **工作树**：干净（无未提交改动；`node_modules/`、`*.tgz`、`.tmp-*` 按 `.gitignore` 排除）
+- **发布状态**：**npm `dsh-turn-cost@0.6.1` 已发布**，`dist-tags.latest = 0.6.1`（此前 latest 是 0.1.3）。0.6.0 从未提交、从未发布，其 tarball 已被 0.6.1 取代。
+- **本轮授权范围**：机主授权提交 → 推送 → 等 CI → 发布 npm → 隔离环境验证已发布包；桌面 profile 的 `link:` 安装**保持不动**。
 
 ## 一、本轮（0.6.1）修了什么 —— 机主报「界面显示 `? · 本会话 15041万 token · 缓存读 100%`」
 
@@ -114,7 +115,7 @@ chrome --headless=new --remote-debugging-port=9333 --user-data-dir=<临时目录
 - ~~桌面宿主需要重启~~：**机主已重启并目检通过**（见 §二.4）。
 - ~~界面观感未目检~~：**已由机主目检**（桌面端当前会话显示约 ¥5.98，估算费用）。
 - **Kimi / 阿里两条订阅额度读数仍未实测**（口径未变）：隔离宿主里两条路由都返回 `ok:false`（该环境没有 loopback OAuth 服务、没有 `bl` CLI）；插件侧只有「路由配置 → 端点归一化」的单测覆盖（`normalizeKimiLocalUsage` / `normalizeAliyunBl`），**没有端到端实机读数**，因此**不声称额度读数可用**。
-- **`github:` 形式的「添加插件」仍未实机跑**：npm 形式在 0.6.1 发布后由隔离环境实测（见 §八）；Git 形式只满足包结构要求，未实测。- 桌面 profile 的 `ratesPath` 仍未关联（§四），改完需重启宿主。
+- **`github:` 形式的「添加插件」仍未实机跑**：**npm 形式已在 0.6.1 发布后由隔离环境实测通过**（见 §八）；Git 形式只满足包结构要求（`main` + `exports["./client"]` + 无构建步骤），未实测。- 桌面 profile 的 `ratesPath` 仍未关联（§四），改完需重启宿主。
 
 ## 六、环境事实（2026-10-03 家用机）
 
@@ -128,7 +129,21 @@ chrome --headless=new --remote-debugging-port=9333 --user-data-dir=<临时目录
 
 家用机（0.6.1 真因定位 + 隔离宿主端到端 + 无头浏览器逐轮核对 + 机主目检，2026-10-03）；家用机（0.6.0 官方接入改造 / 官方路径三层验证 / 80 项测试，2026-10-03）；家用机（0.5.3 / 0.5.2 / K3 双层复检，2026-09）；单位机（0.5.1，2026-09-10）；单位机（0.5.0，2026-09-02）
 
-## 八、0.6.1 发布记录
+## 八、0.6.1 发布记录（2026-10-03）
 
-- 本轮经机主明确授权执行：**提交 → 推送 → 等 CI 通过 → 发布 npm 0.6.1 → 隔离环境验证已发布包**。桌面 profile 的 `link:` 安装**保持不动**，不被 npm 版本替换。
-- 发布前的路径核对、敏感数据排除与门禁结果，以及提交号、CI 结论、registry 版本/dist-tag、已发布包在隔离宿主上的「安装 + 费用查询」实测结果，见本节发布后追加的记录（或本轮对话报告）。
+机主明确授权后执行：提交 → 推送 → 等 CI 通过 → 发布 npm → 隔离环境验证已发布包。桌面 profile 的 `link:` 安装**未被替换**（实测仍是 `Junction → F:\Workspaces\dsh-turn-cost`）。
+
+| 环节 | 结果 |
+|---|---|
+| 提交 | **`29b38d8`** `release: 0.6.1 — 走官方「添加插件」接入，并修掉「金额恒为 ?」的真因`（19 路径新增/修改 + 35 路径删除；`git diff --check` 干净；无临时文件/个人配置/凭据进入版本库） |
+| 推送 | `4a191f7..29b38d8  master -> master` |
+| CI | run **[37062612009](https://github.com/WFMinerva/dsh-turn-cost/actions/runs/37062612009)** job `npm ci + tests` ✓（headSha 与提交一致；唯一注解是 GitHub 的 Node 20 弃用提示） |
+| 发布 | `npm publish` 先被 EOTP 拦住（npm 11 默认 `auth-type=web`，给出的浏览器 URL 里 authId 被打成 `***`，无法转交），改由机主在终端用 `npm publish --otp=<码>` 完成。发布时间 `2026-10-02T20:59:07Z`（北京时间 2026-10-03 04:59） |
+| registry | `dist-tags.latest = 0.6.1`；`versions = 0.1.0…0.1.3, 0.6.1`；`dist.shasum = 28425d80bae4ce68e46384962f4a4191a42f5a36`（与发布前 dry-run 指纹**逐位一致**） |
+| 包内容 | 从 registry 取回 tarball 解包，10 个文件与仓库**逐文件 SHA256 全部 MATCH**；**`README.md` 也在内**（npm 页面 README 现为 8485 字节 / 186 行，与仓库归一化后完全相同——此前页面还是 0.1.3 的 2669 字节 / 88 行旧版） |
+| 官方安装 | 隔离宿主（`$DSH_HOME=C:\Temp\dsh-tc-pub`，官方 `--from-default-profile web`）执行 `dsh plugin --profile pub add dsh-turn-cost@0.6.1`：`dependencies` 写成 `"0.6.1"`（**非 `link:`**）、安装目录 `LinkType` 为空（真实目录而非 junction）、pnpm 从 registry 解析并下载、`dsh.profile.bundles` 自动追加；启动日志**没有** `skipping profile bundle` |
+| 已发布包的费用查询 | 喂同一条真实会话后（`--port 19402`）：`turnCost/sessionTotals` → `cost=6.61436252, steps=585, priced=585, unpriced=0, models=["deepseek-flash"], cacheHitRate=0.9969`；`turnCost/query` 逐轮 `2.52076228(246) + 1.80360808(128) + 1.65231392(160) + 0.43785796(36) + 0.19982028(15) = 6.61436252` **恰等于会话汇总**；`{messageId}` 定位（末条消息 → turn 5）与 `{turn}` 定位返回同一数字 |
+| 已发布包的界面 | 无头浏览器打开隔离宿主：读数条 `deepseek-flash · 本会话 ¥6.61 · 21792万 token · 缓存读 99.7%`、每轮徽章 `本轮 ¥0.44 …` / `本轮 ¥0.20 …`、官方统计条 `5 轮 585 步 / 218M tok·缓存命中 99.7%`，控制台无异常 |
+| 清理 | 隔离宿主与无头浏览器已关停（19402/9333 无监听）、临时 home 与浏览器 profile 目录已删除；桌面宿主未重启、未改动 |
+
+> 观察到的**噪声**（不影响结论）：官方 `dsh plugin add` 在此组合下会打印一条 pnpm 的 `Issues with peer dependencies found` 警告——因为官方 bundle（`@deepseek-ai/dsh-*`）由应用运行时提供、不在 profile 的 node_modules 里，pnpm 看不到它们。dsh 自己的兼容性门禁只判 `@deepseek-ai/dsh*` 的 `peerDependencies`，本插件全为 `"*"`；启动无 `skipping`、host 与 client 均正常挂载即为证。
