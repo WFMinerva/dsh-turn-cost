@@ -5,10 +5,11 @@
 > **状态口径**：只写「已用命令/工具核到的事实」，并标明核对的时点与机器。凡未经核实一律写进「未验证项」，不写成完成；**「装得上」「dump-config 正常」「HTTP 200」「界面有渲染」都不算「跑起来了」**。
 
 - **当前分支**：master
-- **HEAD**：`e13fe3d`（`fix: 0.6.2 — 补齐中国法定节假日全天闲时规则，清除失效的 Pro 切价注释`；已推送，`origin/master` 同步。此前 `29b38d8`／`839db31` 属 0.6.1 轮）
+- **HEAD**：`1b81104`（`docs(readme): 加界面截图（会话累计 + 每轮费用），并把 assets 纳入 npm 包`；已推送，`origin/master` 同步）。同一轮的链路：`e13fe3d`（0.6.2 修复）→ `5cde0d1`（发布记录）→ `1b81104`（截图）；`29b38d8`／`839db31` 属 0.6.1 轮。
 - **工作树**：干净（无未提交改动；`node_modules/`、`*.tgz`、`.tmp-*` 按 `.gitignore` 排除）
-- **发布状态**：**npm `dsh-turn-cost@0.6.2` 已发布**，`dist-tags.latest = 0.6.2`；**0.6.1 未被改写**（仍在 registry 上，`dist-tags` 里让位给 0.6.2）。
-- **本轮授权范围**：机主授权「按新版本完成修复 → 提交 → 推送 → CI 通过后发布 npm；不得覆盖已发布的 0.6.1」。桌面 profile 的 `link:` 安装**保持不动**。
+- **发布状态**：**npm `dsh-turn-cost@0.6.2` 已发布**，`dist-tags.latest = 0.6.2`；**0.6.1 未被改写**（仍在 registry 上、让位给 0.6.2）。
+- **对外动作**：已向精选列表 `awesome-dsh-plugin/awesome-dsh-plugin` 提条目 PR **[#6441](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin/pull/6441)**（CI pass、MERGEABLE，待维护者合并）；GitHub 仓库描述已更新；截图已发布到本仓库（见 §十）。
+- **本轮授权范围**：0.6.2 修复轮「按新版本完成修复 → 提交 → 推送 → CI 通过后发布 npm；不得覆盖已发布的 0.6.1」；随后机主分别授权「由我提市场条目 PR」「更新仓库描述」「裁掉截图上半部分再推 + 嵌 README 并把 assets 纳入 npm 包」「提交、推送本状态记录」。桌面 profile 的 `link:` 安装**保持不动**。
 
 ## 一、本轮（0.6.2）修了什么 —— 假日计费缺陷（Codex 独立发现）
 
@@ -149,6 +150,9 @@ node rpc.mjs "<带 token 的 URL>" <sessionId>             # 官方 wire：POST 
 - **调休上班的周末没有独立测试数据**：本机日志里 9/20 有 131 个样本（`kimi-coding/k3`，无单价）、10/10 尚无样本；「调休周末按空闲价」目前由周末规则 + 单测覆盖，**无实机金额证据**。
 - **Kimi / 阿里两条订阅额度读数仍未实测**：隔离宿主里两条路由都返回 `ok:false`（该环境没有 loopback OAuth 服务、没有 `bl` CLI）；插件侧只有「路由配置 → 端点归一化」的单测覆盖（`normalizeKimiLocalUsage` / `normalizeAliyunBl`），**没有端到端实机读数**，因此**不声称额度读数可用**。
 - **`github:` 形式的「添加插件」仍未实机跑**：npm 形式已在 0.6.1 发布后由隔离环境实测通过（见 §九）；Git 形式只满足包结构要求（`main` + `exports["./client"]` + 无构建步骤），未实测。
+- **市场条目是否被合并未定**：PR #6441 通过 CI 后**由维护者读仓库决定**（其文档明确「CI 是前置条件，不是结论」）。最大风险是评审第 4 条「是否已被现有条目覆盖」——见 §十 的风险登记。若被打回，按其规则只需改描述那一行再推同一分支。
+- **市场的截图渲染与「市场内一键安装」未验证**：条目尚未进入 `plugins.json`，市场里还没有这一条，因此**「卡片真的显示这两张图」「从市场一键装」都只是按约定推断，没有实测**。图片本身的可达性与字节已核（见 §十）。
+- **npm 页面上的 README 图未生效**：`assets/` 已进 npm 包的 `files`，但**要等下一次发布**（如 0.6.3）才会带上；已发布的 0.6.2 页面仍是纯文字 README（它那份 README 无图，因此**不会**出现坏图）。
 - **桌面 profile 的 `ratesPath` 仍未关联**（§五），改完需重启宿主。
 - **订阅路由（k3 / glm-5.3 等）的金额恒为 0**：费率表里没有单价 → `unpriced`，只显 token。这是设计（不编造价格），不是缺口。
 
@@ -162,7 +166,7 @@ node rpc.mjs "<带 token 的 URL>" <sessionId>             # 官方 wire：POST 
 
 ## 八、已验证机器
 
-家用机（0.6.2 假日规则 + 全量重算 + 官方源实抓 + 发布包隔离验证，2026-10-03）；家用机（0.6.1 真因定位 + 隔离宿主端到端 + 无头浏览器逐轮核对 + 机主目检，2026-10-03）；家用机（0.6.0 官方接入改造 / 官方路径三层验证 / 80 项测试，2026-10-03）；家用机（0.5.3 / 0.5.2 / K3 双层复检，2026-09）；单位机（0.5.1，2026-09-10）；单位机（0.5.0，2026-09-02）
+家用机（市场条目投稿 + README 截图发布 + 仓库描述更新，2026-10-03）；家用机（0.6.2 假日规则 + 全量重算 + 官方源实抓 + 发布包隔离验证，2026-10-03）；家用机（0.6.1 真因定位 + 隔离宿主端到端 + 无头浏览器逐轮核对 + 机主目检，2026-10-03）；家用机（0.6.0 官方接入改造 / 官方路径三层验证 / 80 项测试，2026-10-03）；家用机（0.5.3 / 0.5.2 / K3 双层复检，2026-09）；单位机（0.5.1，2026-09-10）；单位机（0.5.0，2026-09-02）
 
 ## 九、0.6.2 发布记录（2026-10-03）
 
@@ -179,3 +183,53 @@ node rpc.mjs "<带 token 的 URL>" <sessionId>             # 官方 wire：POST 
 | 清理 | 隔离宿主已关停（19403 无监听）、临时 home 与 0.6.1 tarball 解包目录已删除；**桌面 profile 未重启、未改动**（实测仍是 `Junction → F:\Workspaces\dsh-turn-cost`） |
 
 > 观察到的**噪声**（不影响结论）：官方 `dsh plugin add` 在此组合下会打印一条 pnpm 的 `Issues with peer dependencies found` 警告——因为官方 bundle（`@deepseek-ai/dsh-*`）由应用运行时提供、不在 profile 的 node_modules 里，pnpm 看不到它们。dsh 自己的兼容性门禁只判 `@deepseek-ai/dsh*` 的 `peerDependencies`，本插件全为 `"*"`；启动无 `skipping`、host 与 client 均正常挂载即为证。
+
+## 十、DSH Market 上架投稿与截图（2026-10-03）
+
+### 入口在哪：不在 DSH Market 本身
+
+DSH Market（[dshmarket.com](https://dshmarket.com/zh/)，npm `dshmarket`）自己的 README 写明「**这个仓库是市场应用本身，不是插件目录**」，插件列表来自精选列表 **`awesome-dsh-plugin/awesome-dsh-plugin`**（网站 awesome-dsh-plugin.com 的 `plugins.json`），且市场**只允许安装该列表内的来源**。所以「上架」= 向那个列表提 PR。
+
+⚠️ 存在**同名但完全独立的第二个列表** `beancookie/awesome-dsh-plugin`（156★；与 org 仓库**没有** fork 关系，两者都是非 fork 的独立仓库）。本插件**早在 0.1.x 期就已被那个列表收录**，所以 README 的 `featured in awesome-dsh-plugin` 徽章属实——但它**不会**让插件出现在市场里。以后看到该徽章别误判为「已上架市场」。
+
+### 硬门槛逐条核对（contributing.md）——全过
+
+| 要求 | 状态 |
+|---|---|
+| `package.json` 声明 `dsh.bundle` | ✅ `dsh.bundle.patch: ./cordis.patch.yml`，且补丁形状与官方示例一致（`- insert: - id: turn-cost / name: 'dsh-turn-cost'`） |
+| 真实可用代码 / 非聚合包 | ✅ host + web client 两半、91 测试、无第三方 bundle 依赖 |
+| 仓库创建满 1 天 | ✅ 2026-08-17 |
+| 活跃维护 | ✅ 最后推送 2026-10-02、已发 0.6.2 |
+| `dsh-plugin` topic | ✅ 已有（另有 cost-tracking 等 7 个） |
+| MIT | ✅ |
+| 描述属实、无营销词、中英各一句 | ✅ 条目文件里 `description.en` / `zh` |
+| 分类 | ✅ `category: usage`（用量与计费） |
+| 条目数 ≤ 3 | ✅ 1 条 |
+| npm（推荐项） | ✅ 0.6.2 已发布，且包的 `repository` 指回本仓库 → 下载量自动关联；**条目内不能写 `npm:`**（手写会被校验拒） |
+
+### 投稿物与 PR
+
+- 文件：`data/plugins/WFMinerva__dsh-turn-cost.yml`（+6，**只加这一个文件**，不碰任何别人的条目）。
+- 校验：用 **js-yaml 实解析**（与它 CI 的解析一致）——4 个键、`category` 合法、中英描述均以句号收尾、**不含「冒号+空格」**（官方点名的 YAML 坑，英文里用 `—` 绕开）、无营销词。
+- PR：**[#6441](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin/pull/6441)** `Add WFMinerva/dsh-turn-cost`；head `WFMinerva/awesome-dsh-plugin-1:add-dsh-turn-cost` → base `main`。fork 名带 `-1` 是因为 8-17 已存在一个 beancookie 列表的 fork；用 GitHub API 建分支+提交（仓库 142 MB，不整仓克隆）。提交后用 API 取回远端文件与本地**逐字节比对**（948 bytes, identical）。
+- CI：check **pass（8m9s）**，run [37068896375](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin/actions/runs/37068896375)；PR 状态 **OPEN / MERGEABLE**，`reviewDecision` 为空 → **待维护者读仓库后决定**。
+- 合并后：网站自动重建 → `plugins.json` 收录 → 市场下次刷新出现在「用量与计费」并可在市场内一键装。
+
+### 已如实登记的风险（不要粉饰）
+
+评审第 4 条是「**是否已被现有条目覆盖**」，而 `usage` 分类里同时讲峰谷+费用的条目有 **58 条**。关键事实：**节假日闲时不是本插件的独有卖点**——`Han-1413141/dsh-cost-meter`（★361）已实现周末 + 中国法定节假日全天闲时（其 `lib/pricing.js` 有 `DEFAULT_PEAK_HOLIDAYS`、`holidayZoneAt()`，README 明写含调休周末），且功能更宽（余额、额度、90+ 模型价目、价格一键同步）。PR 正文**主动写明**了这处重叠，并声明本插件的差异是**范围**（只算成本、只用本机会话日志、不调余额 API、无需 API Key、可叠加自定义费率表），且若维护者判定过近、被拒也接受。另：`future007s/dsh-peak-indicator`、`rayadesune/...-chat-billing`、`jkStars/dsh-token-usage-stats` 三条同类**未搜到**假日相关代码，但代码搜索只覆盖默认分支，**不可据此断言它们没有**。
+
+### 截图（按官方约定放在自己仓库）
+
+`screenshots.json` 列 1–8 张**相对路径**（不得以 `/` 开头、不得含 `..`）；市场详情页读它，以后换图推自己仓库即可，不必再向列表仓库提 PR。
+
+| 文件 | 来源与处理 |
+|---|---|
+| `assets/screenshots/session-total.png`（998×42） | 机主截图原样：插件会话累计行与官方统计条并列（`deepseek-flash · 本会话 ¥8.26 · 26004万 token · 缓存读 99.7%`） |
+| `assets/screenshots/per-turn-cost.png`（623×27） | **从机主截图裁出底部操作行**：原图（623×180）上半是「已编辑 2 个文件」工具卡，含本机临时路径 `C:/temp/dsh-tc-inspect/...` 与投稿元信息，不对外。裁剪按**行墨迹**自动定位（检出 4 条墨迹带，保留第 4 条 ±4px），裁前出预览确认未切字 |
+
+- README 新增「界面」节嵌这两张图；`package.json` 的 `files` 加 `assets/`（否则 npm 页面的 README 图会是坏的，npm 页渲染的是发布包里的 README）→ 发布包 **10 → 12 文件**、**35.3 → 51.6 KB**。
+- 提交/推送：**`1b81104`**（`5cde0d1..1b81104` **快进**，未 force-push、未改写已推送历史——amend 掉的是从未推送的本地提交）→ CI run **37070637746** ✓。
+- 线上核验：`screenshots.json` 与两张 PNG 经 `https://raw.githubusercontent.com/WFMinerva/dsh-turn-cost/HEAD/...` 取回均 **HTTP 200**，PNG 魔数正确，且与本地**逐字节相同**（9807 / 5258 bytes）。
+- 仓库元数据：GitHub 仓库描述已改为与 README/代码一致（含「会话累计」与「周末与中国法定节假日全天按空闲价」）。
+- **未验证**：卡片是否真的渲染出这两张图、市场内能否一键安装（条目尚未合并，市场里还没有这一条）——见 §六。
