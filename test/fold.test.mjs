@@ -7,8 +7,13 @@ import assert from "node:assert/strict";
 import {
   ZSTD_MAGIC,
   WEEKEND_OFF_PEAK_EFFECTIVE_MS,
+  HOLIDAY_OFF_PEAK_EFFECTIVE_MS,
   FLASH_REPRICE_EFFECTIVE_MS,
+  STATUTORY_HOLIDAY_RANGES,
+  STATUTORY_HOLIDAYS,
+  MAKEUP_WORKDAY_WEEKENDS,
   isPeak,
+  isStatutoryHoliday,
   beijingDay,
   foldEvents,
   costOfStep,
@@ -63,6 +68,93 @@ test("isPeak: weekend becomes all off-peak at the official cutoff without rewrit
   assert.equal(isPeak(atBeijing(2026, 8, 30, 15)), false); // Sunday after cutoff
   assert.equal(isPeak(atBeijing(2026, 8, 28, 10)), true); // Friday unchanged
   assert.equal(isPeak(atBeijing(2026, 8, 31, 15)), true); // Monday unchanged
+});
+
+test("statutory holidays: the built-in table is exactly the 2026 State Council arrangement", () => {
+  // 《国务院办公厅关于2026年部分节假日安排的通知》国办发明电〔2025〕7号（2025-11-04），
+  // i.e. the arrangement the official pricing footnote points at. Ranges inclusive.
+  assert.deepEqual(
+    STATUTORY_HOLIDAY_RANGES.map(([from, to]) => `${from}..${to}`),
+    [
+      "2026-01-01..2026-01-03", // 元旦
+      "2026-02-15..2026-02-23", // 春节（9 天，不是新闻摘要里的 8 天）
+      "2026-04-04..2026-04-06", // 清明节
+      "2026-05-01..2026-05-05", // 劳动节
+      "2026-06-19..2026-06-21", // 端午节
+      "2026-09-25..2026-09-27", // 中秋节
+      "2026-10-01..2026-10-07", // 国庆节
+    ],
+  );
+  assert.equal(STATUTORY_HOLIDAYS.length, 3 + 9 + 3 + 5 + 3 + 3 + 7); // 33 天
+  assert.equal(new Set(STATUTORY_HOLIDAYS).size, STATUTORY_HOLIDAYS.length); // 区间不重叠
+  assert.equal(STATUTORY_HOLIDAYS[0], "2026-01-01");
+  assert.equal(STATUTORY_HOLIDAYS.at(-1), "2026-10-07");
+  // 调休上班日是工作日、不是节假日，且按官方安排全都落在周末。
+  for (const day of MAKEUP_WORKDAY_WEEKENDS) {
+    const weekday = new Date(`${day}T12:00:00+08:00`).getUTCDay();
+    assert.ok(weekday === 0 || weekday === 6, `${day} 应为周末`);
+    assert.equal(STATUTORY_HOLIDAYS.includes(day), false, `${day} 是上班日`);
+  }
+});
+
+test("isPeak: statutory holidays are off-peak all day (the reported misjudgments)", () => {
+  // 机主报的三个误判时点：国庆假期内的周四、周五、周一。
+  assert.equal(isPeak(atBeijing(2026, 10, 1, 10)), false);
+  assert.equal(isPeak(atBeijing(2026, 10, 2, 15)), false);
+  assert.equal(isPeak(atBeijing(2026, 10, 5, 10)), false);
+  // 两个假期、每个高峰窗口整点，逐点为空闲；元旦/春节等由生效边界测试覆盖。
+  for (const hour of [9, 11, 14, 17]) {
+    assert.equal(isPeak(atBeijing(2026, 9, 25, hour)), false, `中秋 9/25 ${hour}:00`);
+    assert.equal(isPeak(atBeijing(2026, 9, 27, hour)), false, `中秋 9/27 ${hour}:00`);
+    assert.equal(isPeak(atBeijing(2026, 10, 7, hour)), false, `国庆 10/7 ${hour}:00`);
+  }
+  // 假期任一时刻都不是高峰，包括非高峰窗口之外的时刻。
+  assert.equal(isPeak(atBeijing(2026, 10, 3, 8)), false); // 周六
+  assert.equal(isPeak(atBeijing(2026, 10, 4, 12)), false); // 周日
+  assert.equal(isStatutoryHoliday(atBeijing(2026, 10, 6, 23, 59)), true);
+  assert.equal(isStatutoryHoliday(atBeijing(2026, 10, 8, 0)), false);
+});
+
+test("isPeak: makeup workday weekends stay off-peak where the weekend rule applies", () => {
+  // 官方口径：调休上班的周末仍按空闲时段计费 —— 所以**不能**按这张表建工作日日历。
+  for (const day of ["2026-09-20", "2026-10-10"]) {
+    assert.equal(isPeak(Date.parse(`${day}T10:00:00+08:00`)), false, `${day} 10:00`);
+    assert.equal(isPeak(Date.parse(`${day}T15:00:00+08:00`)), false, `${day} 15:00`);
+  }
+  // 周末规则生效点（2026-08-23）之前的调休周末保留当时的每日峰谷规则（历史不改写）。
+  assert.equal(isPeak(atBeijing(2026, 1, 4, 10)), true);
+  assert.equal(isPeak(atBeijing(2026, 2, 14, 10)), true);
+  assert.equal(isPeak(atBeijing(2026, 5, 9, 15)), true);
+  // 调休周末过后的周一恢复正常工作日高峰。
+  assert.equal(isPeak(atBeijing(2026, 10, 12, 10)), true);
+  assert.equal(isPeak(atBeijing(2026, 10, 12, 13)), false);
+});
+
+test("isPeak: holiday effective boundary, ordinary workdays, and no ambiguous window", () => {
+  assert.equal(HOLIDAY_OFF_PEAK_EFFECTIVE_MS, atBeijing(2026, 9, 19, 0));
+  // 节前最后的普通工作日（周四）照常高峰；假期第一天 00:00 起全天空闲。
+  assert.equal(isPeak(atBeijing(2026, 9, 24, 9)), true);
+  assert.equal(isPeak(atBeijing(2026, 9, 24, 17, 59)), true);
+  assert.equal(isPeak(atBeijing(2026, 9, 25, 0)), false);
+  // 假期最后一刻仍空闲，次日（周四）高峰窗口恢复，午间仍空闲。
+  assert.equal(isPeak(atBeijing(2026, 10, 7, 23, 59)), false);
+  assert.equal(isPeak(atBeijing(2026, 10, 8, 8)), false);
+  assert.equal(isPeak(atBeijing(2026, 10, 8, 9)), true);
+  assert.equal(isPeak(atBeijing(2026, 10, 8, 12)), false);
+  // 假期之间的普通工作日不受影响。
+  assert.equal(isPeak(atBeijing(2026, 9, 22, 10)), true);
+  assert.equal(isPeak(atBeijing(2026, 9, 23, 15)), true);
+  // **生效时间不可观测**：官方定价页不给 holiday 子句的生效时刻，而 2026 年的
+  // 法定假期要么整体早于峰谷机制（2026-08-17：元旦/春节/清明/劳动/端午），要么
+  // 整体晚于本常量（中秋/国庆）——没有任何一天落在两种读法的分歧窗口里。
+  const mechanismStart = Date.parse("2026-08-17T00:00:00+08:00");
+  for (const day of STATUTORY_HOLIDAYS) {
+    const ms = Date.parse(`${day}T12:00:00+08:00`);
+    assert.ok(
+      ms < mechanismStart || ms >= HOLIDAY_OFF_PEAK_EFFECTIVE_MS,
+      `${day} 落在生效时刻的分歧窗口内，需要先核实官方生效时间`,
+    );
+  }
 });
 
 test("isPeak: Beijing schedule is independent of the host timezone", () => {
@@ -148,6 +240,22 @@ test("flash repricing: new card prices every bucket and survives the weekend rul
   const saturday = atBeijing(2026, 9, 12, 15);
   assert.equal(isPeak(saturday), false);
   assert.ok(Math.abs(costOfStep({ ...base, time: saturday, inputTokens: 1e6 }) - 1.0) < 1e-9);
+});
+
+test("costOfStep/costOfSession: holiday steps price at the off-peak card, per step", () => {
+  const base = { model: "deepseek-flash", step: 1, inputTokens: 0, cacheReadTokens: 0, outputTokens: 0, cacheWriteTokens: 0 };
+  const holiday = { ...base, turn: 1, time: atBeijing(2026, 10, 1, 10), inputTokens: 1e6 };
+  assert.ok(Math.abs(costOfStep(holiday) - 1.0) < 1e-9); // 空闲 1.0 元/M，而非高峰 2.0
+  const workday = { ...base, turn: 2, time: atBeijing(2026, 10, 8, 10), inputTokens: 1e6 };
+  assert.ok(Math.abs(costOfStep(workday) - 2.0) < 1e-9); // 假后工作日仍高峰 2.0
+  // 同一会话跨「假期 → 工作日」按每步时点分别取价。
+  const total = costOfSession([holiday, workday]);
+  assert.ok(Math.abs(total.cost - 3.0) < 1e-9);
+  assert.equal(total.priced, 2);
+  assert.equal(total.unpriced, 0);
+  // Pro 价未受假日规则影响（官方 2026-09-10 明确 Pro 计费方式不变）。
+  assert.ok(Math.abs(costOfStep({ ...holiday, model: "deepseek-v4-pro" }) - 4.5) < 1e-9);
+  assert.ok(Math.abs(costOfStep({ ...workday, model: "deepseek-v4-pro" }) - 9.0) < 1e-9);
 });
 
 test("flash repricing: one session spanning the cutoff sums both cards", () => {

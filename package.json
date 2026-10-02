@@ -1,6 +1,6 @@
 {
   "name": "dsh-turn-cost",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "description": "Per-turn/session estimated cost plus subscription quota windows for DeepSeek Harness (dsh), shown in the Web UI: pay-as-you-go DeepSeek routes show money, Kimi/Aliyun subscription routes show tokens plus the official live window reading",
   "type": "module",
   "packageManager": "npm@11.16.0",
